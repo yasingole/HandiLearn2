@@ -1,0 +1,30 @@
+:root {
+  --primary-color: #4a8fe7;
+  --secondary-color: #e74a8f;
+  --accent-color: #8fe74a;
+  --background-color: #f8f9fa;
+  --text-color: #333;
+  --font-family: 'Comic Sans MS', 'Comic Sans', cursive, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-family);
+  background-color: var(--background-color);
+  color: var(--text-color);
+  line-height: 1.6;
+}
+
+button, input {
+  font-family: inherit;
+}
+
+#root {
+  display: flex;
+  min-height: 100vh;
+}
