@@ -21,44 +21,9 @@ main {
   gap: 2rem;
 }
 
-.game-container {
-  width: 100%;
-  max-width: 1200px;
-  height: 60vh;
-  position: relative;
-  background-color: #eee;
-  border-radius: 10px;
-  overflow: hidden;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  display: flex;
-}
-
-#playcanvas-container {
-  flex: 3;
-  background-color: #ddd;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-#playcanvas-container::after {
-  content: "3D Game Area - Coming Soon";
-  color: #777;
-  font-size: 1.5rem;
-}
-
-#webcam-container {
-  flex: 1;
-  background-color: #333;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-#webcam-container::after {
-  content: "Webcam Feed";
-  color: #ddd;
-  font-size: 1rem;
+.welcome-container {
+  text-align: center;
+  margin-bottom: 2rem;
 }
 
 .module-selector {
@@ -72,6 +37,7 @@ main {
   justify-content: center;
   gap: 2rem;
   margin-top: 1rem;
+  flex-wrap: wrap;
 }
 
 .module-buttons button {
@@ -101,4 +67,70 @@ footer {
   padding: 1rem;
   text-align: center;
   margin-top: auto;
+}
+
+/* Game View Styles */
+.game-view {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.webcam-feed {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #222;
+}
+
+.webcam-feed::after {
+  content: "Webcam Feed (Coming in Step 2)";
+  color: white;
+  font-size: 1.5rem;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.game-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.back-button {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  z-index: 100;
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.back-button:hover {
+  background-color: #3a7fd7;
+}
+
+.module-info {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 100;
+  background-color: rgba(0, 0, 0, 0.5);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 5px;
 }
