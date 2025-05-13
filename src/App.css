@@ -1,4 +1,36 @@
-.app {
+.dev-tools {
+  margin-top: 2rem;
+  padding: 1rem;
+  background-color: #f8f9fa;
+  border: 1px dashed #ccc;
+  border-radius: 10px;
+  text-align: center;
+  width: 100%;
+  max-width: 600px;
+}
+
+.dev-tools h3 {
+  margin-top: 0;
+  color: #555;
+  font-size: 1.2rem;
+}
+
+.dev-button {
+  background-color: var(--secondary-color);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+  margin: 0.5rem;
+}
+
+.dev-button:hover {
+  background-color: #d04280;
+  transform: translateY(-2px);
+}.app {
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -49,16 +81,18 @@ main {
   font-size: 1.1rem;
   cursor: pointer;
   transition: all 0.3s ease;
+  opacity: 1;
 }
 
-.module-buttons button:hover:not([disabled]) {
+.module-buttons button:hover {
   background-color: #3a7fd7;
   transform: translateY(-2px);
 }
 
-.module-buttons button:disabled {
+.module-buttons button[disabled] {
   background-color: #ccc;
   cursor: not-allowed;
+  opacity: 0.7;
 }
 
 footer {
