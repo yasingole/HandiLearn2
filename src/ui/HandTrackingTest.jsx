@@ -1,8 +1,8 @@
 // src/ui/HandTrackingTest.jsx
-// UPDATED VERSION WITH DIRECTION DISPLAY
+// UPDATED VERSION TO DISPLAY POINTING DIRECTION
 
 import React, { useEffect, useRef, useState } from 'react';
-import InputManager from '../core/input/input-manager'; // Make sure this path is correct
+import InputManager from '../core/input/input-manager'; // Fixed import path
 import './HandTrackingTest.css';
 
 function HandTrackingTest() {
@@ -11,7 +11,6 @@ function HandTrackingTest() {
   const [inputManager, setInputManager] = useState(null);
   const [isTracking, setIsTracking] = useState(false);
   const [detectedGesture, setDetectedGesture] = useState('None');
-  const [pointingDirection, setPointingDirection] = useState(null);
   const [provider, setProvider] = useState('mediapipe');
   const [error, setError] = useState(null);
   const [isInitializing, setIsInitializing] = useState(true);
@@ -103,7 +102,6 @@ function HandTrackingTest() {
         await inputManager.stopTracking();
         setIsTracking(false);
         setDetectedGesture('None');
-        setPointingDirection(null);
       } else {
         if (videoRef.current) {
           inputManager.setVideoElement(videoRef.current);
@@ -113,16 +111,17 @@ function HandTrackingTest() {
             drawResults(results);
           });
 
-          // Register gesture detection callback with direction awareness
+          // Register gesture detection callback with enhanced display
           inputManager.onGestureDetected((gesture, handedness) => {
-            // Check if this is a point gesture with direction
+            // Format the detected gesture with additional details
+            let displayText = `${gesture.name} (${handedness})`;
+
+            // Add direction for pointing gesture
             if (gesture.name === 'point' && gesture.direction) {
-              setDetectedGesture(`${gesture.name} (${handedness})`);
-              setPointingDirection(gesture.direction);
-            } else {
-              setDetectedGesture(`${gesture.name} (${handedness})`);
-              setPointingDirection(null);
+              displayText = `${gesture.name} ${gesture.direction} (${handedness})`;
             }
+
+            setDetectedGesture(displayText);
           });
 
           await inputManager.startTracking();
@@ -152,7 +151,6 @@ function HandTrackingTest() {
     setProvider(prev => prev === 'mediapipe' ? 'mock' : 'mediapipe');
     setIsTracking(false);
     setDetectedGesture('None');
-    setPointingDirection(null);
     setError(null);
   };
 
@@ -227,12 +225,6 @@ function HandTrackingTest() {
     }
   };
 
-  // CSS class for pointing direction indicators
-  const getDirectionClass = () => {
-    if (!pointingDirection) return '';
-    return `pointing-${pointingDirection}`;
-  };
-
   return (
     <div className="hand-tracking-test">
       <h2>Hand Tracking Test</h2>
@@ -251,16 +243,6 @@ function HandTrackingTest() {
 
       <div className="gesture-display">
         <p>Detected Gesture: <strong>{detectedGesture}</strong></p>
-
-        {/* Display pointing direction when applicable */}
-        {pointingDirection && (
-          <div className={`pointing-direction ${getDirectionClass()}`}>
-            <p>Pointing: <strong>{pointingDirection}</strong></p>
-            <div className="direction-indicator">
-              <div className="direction-arrow"></div>
-            </div>
-          </div>
-        )}
       </div>
 
       <div className="video-container">
@@ -279,7 +261,7 @@ function HandTrackingTest() {
       <div className="instructions">
         <h3>Try these gestures:</h3>
         <ul>
-          <li><strong>Point:</strong> Extend only your index finger (now with direction!)</li>
+          <li><strong>Point:</strong> Extend only your index finger. Now shows direction (up, down, left, right)!</li>
           <li><strong>Open:</strong> Spread all your fingers</li>
           <li><strong>Grab:</strong> Make a fist</li>
           <li><strong>Wave:</strong> Move your open hand side to side</li>
