@@ -1,5 +1,5 @@
 // src/core/input/providers/mediapipe.js
-// IMPROVED FORWARD POINTING DETECTION - CONTINUED
+// COMPLETE VERSION WITH DIAGONAL POINTING DIRECTIONS
 
 /**
  * MediaPipe Provider
@@ -377,13 +377,33 @@ class MediaPipeProvider {
           console.log(`Detected ${pointingDirection} pointing with z=${dz.toFixed(3)}`);
         }
       }
-      // If not primarily in z-direction, determine the primary 2D direction
-      else if (horizontalMag > verticalMag) {
-        // Pointing horizontally
-        pointingDirection = dx > 0 ? 'right' : 'left';
-      } else {
-        // Pointing vertically
-        pointingDirection = dy > 0 ? 'down' : 'up';
+      // If not pointing forward/backward, check for diagonal directions
+      else {
+        // Determine if movement is more horizontal, vertical, or diagonal
+        const isSignificantHorizontal = horizontalMag > 0.03;
+        const isSignificantVertical = verticalMag > 0.03;
+
+        // For diagonal detection, need significant components in both directions
+        if (isSignificantHorizontal && isSignificantVertical) {
+          // It's a diagonal direction - determine which quadrant
+          if (dx > 0 && dy < 0) {
+            pointingDirection = 'top-right';
+          } else if (dx < 0 && dy < 0) {
+            pointingDirection = 'top-left';
+          } else if (dx > 0 && dy > 0) {
+            pointingDirection = 'bottom-right';
+          } else if (dx < 0 && dy > 0) {
+            pointingDirection = 'bottom-left';
+          }
+        }
+        // If not diagonal, determine if it's a cardinal direction
+        else if (horizontalMag > verticalMag) {
+          // Pointing horizontally
+          pointingDirection = dx > 0 ? 'right' : 'left';
+        } else {
+          // Pointing vertically
+          pointingDirection = dy > 0 ? 'down' : 'up';
+        }
       }
 
       return {
@@ -540,6 +560,7 @@ class MediaPipeProvider {
     return a.x * b.x + a.y * b.y + a.z * b.z;
   }
 
+  
   /**
    * Calculate 3D distance between two points
    * @param {Object} a - First point with x,y,z coordinates

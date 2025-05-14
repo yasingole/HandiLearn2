@@ -1,5 +1,5 @@
 // src/core/input/providers/mock.js
-// UPDATED MOCK PROVIDER WITH 3D POINTING DIRECTIONS
+// UPDATED WITH DIAGONAL AND FORWARD POINTING DIRECTIONS
 
 /**
  * Mock Input Provider
@@ -21,13 +21,17 @@ class MockInputProvider {
       left: this.generateHandLandmarks('Left'),
     };
 
-    // Supported gestures for simulation - now includes directional pointing
+    // Supported gestures for simulation with more pointing directions
     this.gestures = [
       { name: 'point', direction: 'forward', handedness: 'Right', duration: 2000 },
       { name: 'point', direction: 'right', handedness: 'Right', duration: 2000 },
       { name: 'point', direction: 'left', handedness: 'Right', duration: 2000 },
       { name: 'point', direction: 'up', handedness: 'Right', duration: 2000 },
       { name: 'point', direction: 'down', handedness: 'Right', duration: 2000 },
+      { name: 'point', direction: 'top-right', handedness: 'Right', duration: 2000 },
+      { name: 'point', direction: 'top-left', handedness: 'Right', duration: 2000 },
+      { name: 'point', direction: 'bottom-right', handedness: 'Right', duration: 2000 },
+      { name: 'point', direction: 'bottom-left', handedness: 'Right', duration: 2000 },
       { name: 'open', handedness: 'Right', duration: 2000 },
       { name: 'grab', handedness: 'Right', duration: 2000 },
       { name: 'wave', handedness: 'Right', duration: 2000 },
@@ -192,34 +196,30 @@ class MockInputProvider {
       if (this.gestureCallbacks.length > 0) {
         const newGesture = this.gestures[this.currentGestureIndex];
         this.gestureCallbacks.forEach(callback => {
-          // For point gestures, include direction
-          if (newGesture.name === 'point') {
-            callback(
-              { name: newGesture.name, direction: newGesture.direction, confidence: 0.9 },
-              newGesture.handedness,
-              this.simulatedHands[newGesture.handedness.toLowerCase()]
-            );
-          } else {
-            callback(
-              { name: newGesture.name, confidence: 0.9 },
-              newGesture.handedness,
-              this.simulatedHands[newGesture.handedness.toLowerCase()]
-            );
-          }
+          callback(
+            {
+              name: newGesture.name,
+              direction: newGesture.direction,
+              confidence: 0.9
+            },
+            newGesture.handedness,
+            this.simulatedHands[newGesture.handedness.toLowerCase()]
+          );
         });
       }
     }
 
     // Adjust finger positions based on current gesture
-    this.updateFingerPositions(this.simulatedHands.right, currentGesture);
+    this.updateFingerPositions(this.simulatedHands.right, currentGesture.name, currentGesture.direction);
   }
 
   /**
-   * Update finger positions to simulate specific gestures
+   * Update finger positions to simulate specific gestures with direction
    * @param {Array} landmarks - Hand landmarks to update
-   * @param {Object} gesture - Gesture info to simulate
+   * @param {String} gesture - Gesture name to simulate
+   * @param {String} direction - Direction for pointing gesture
    */
-  updateFingerPositions(landmarks, gesture) {
+  updateFingerPositions(landmarks, gesture, direction) {
     // Finger indices:
     // Thumb: 1-4
     // Index: 5-8
@@ -229,75 +229,101 @@ class MockInputProvider {
 
     const wrist = landmarks[0];
 
-    switch (gesture.name) {
-      case 'point': {
-        // Extend index finger, curl others
-        this.extendFinger(landmarks, 1, wrist, gesture.direction);
-        this.curlFinger(landmarks, 2, wrist);
-        this.curlFinger(landmarks, 3, wrist);
-        this.curlFinger(landmarks, 4, wrist);
+    if (gesture === 'point') {
+      // First set up basic point gesture with index finger extended
+      this.extendFinger(landmarks, 1, wrist);
+      this.curlFinger(landmarks, 2, wrist);
+      this.curlFinger(landmarks, 3, wrist);
+      this.curlFinger(landmarks, 4, wrist);
 
-        // If pointing forward/backward, adjust z coordinates
-        if (gesture.direction === 'forward' || gesture.direction === 'backward') {
-          // Get index finger joints
-          const indexMcp = landmarks[5]; // Base of index finger
-          const indexPip = landmarks[6]; // First joint of index finger
-          const indexDip = landmarks[7]; // Second joint of index finger
-          const indexTip = landmarks[8]; // Tip of index finger
+      // Now adjust the direction based on the specified direction
+      const indexTip = landmarks[8]; // Index fingertip
 
-          // Direction factor (negative for forward, positive for backward)
-          const dirFactor = gesture.direction === 'forward' ? -0.2 : 0.2;
+      // Default offset values for each direction
+      let offsetX = 0;
+      let offsetY = 0;
+      let offsetZ = 0;
 
-          // Adjust z values to create pointing toward/away from screen
-          indexMcp.z = wrist.z + dirFactor * 0.2;
-          indexPip.z = wrist.z + dirFactor * 0.4;
-          indexDip.z = wrist.z + dirFactor * 0.6;
-          indexTip.z = wrist.z + dirFactor * 0.8;
-        }
-        break;
+      // Adjust offsets based on direction
+      switch(direction) {
+        case 'right':
+          offsetX = 0.1;
+          break;
+        case 'left':
+          offsetX = -0.1;
+          break;
+        case 'up':
+          offsetY = -0.1;
+          break;
+        case 'down':
+          offsetY = 0.1;
+          break;
+        case 'top-right':
+          offsetX = 0.07;
+          offsetY = -0.07;
+          break;
+        case 'top-left':
+          offsetX = -0.07;
+          offsetY = -0.07;
+          break;
+        case 'bottom-right':
+          offsetX = 0.07;
+          offsetY = 0.07;
+          break;
+        case 'bottom-left':
+          offsetX = -0.07;
+          offsetY = 0.07;
+          break;
+        case 'forward':
+          offsetZ = -0.05;
+          break;
+        case 'backward':
+          offsetZ = 0.05;
+          break;
       }
 
-      case 'open':
-        // All fingers extended
-        this.extendFinger(landmarks, 1, wrist, 'up');
-        this.extendFinger(landmarks, 2, wrist, 'up');
-        this.extendFinger(landmarks, 3, wrist, 'up');
-        this.extendFinger(landmarks, 4, wrist, 'up');
-        break;
+      // Apply the offsets to point in the right direction
+      indexTip.x = wrist.x + offsetX;
+      indexTip.y = wrist.y + offsetY;
+      indexTip.z = wrist.z + offsetZ;
 
-      case 'grab':
-        // All fingers curled
-        this.curlFinger(landmarks, 1, wrist);
-        this.curlFinger(landmarks, 2, wrist);
-        this.curlFinger(landmarks, 3, wrist);
-        this.curlFinger(landmarks, 4, wrist);
-        break;
+    } else if (gesture === 'open') {
+      // All fingers extended
+      this.extendFinger(landmarks, 1, wrist);
+      this.extendFinger(landmarks, 2, wrist);
+      this.extendFinger(landmarks, 3, wrist);
+      this.extendFinger(landmarks, 4, wrist);
 
-      case 'wave':
-        // Similar to open hand but with more side-to-side movement
-        this.extendFinger(landmarks, 1, wrist, 'up');
-        this.extendFinger(landmarks, 2, wrist, 'up');
-        this.extendFinger(landmarks, 3, wrist, 'up');
-        this.extendFinger(landmarks, 4, wrist, 'up');
+    } else if (gesture === 'grab') {
+      // All fingers curled
+      this.curlFinger(landmarks, 1, wrist);
+      this.curlFinger(landmarks, 2, wrist);
+      this.curlFinger(landmarks, 3, wrist);
+      this.curlFinger(landmarks, 4, wrist);
 
-        // Add side-to-side motion
-        const time = Date.now() / 200;
-        const sideOffset = Math.sin(time) * 0.1;
-        landmarks.forEach(point => {
-          point.x += sideOffset;
-        });
-        break;
+    } else if (gesture === 'wave') {
+      // Similar to open hand but with more side-to-side movement
+      this.extendFinger(landmarks, 1, wrist);
+      this.extendFinger(landmarks, 2, wrist);
+      this.extendFinger(landmarks, 3, wrist);
+      this.extendFinger(landmarks, 4, wrist);
+
+      // Add side-to-side motion
+      const time = Date.now() / 200;
+      const sideOffset = Math.sin(time) * 0.1;
+      landmarks.forEach(point => {
+        point.x += sideOffset;
+      });
     }
   }
 
   /**
-   * Extend a finger in the simulated hand in a specific direction
+   * Extend a finger in the simulated hand
    * @param {Array} landmarks - Hand landmarks
    * @param {Number} fingerIndex - Index of the finger (1=index, 2=middle, 3=ring, 4=pinky)
    * @param {Object} wrist - Wrist landmark
-   * @param {String} direction - Direction to point (up, down, left, right, forward, backward)
    */
-  extendFinger(landmarks, fingerIndex, wrist, direction = 'up') {
+  extendFinger(landmarks, fingerIndex, wrist) {
     // Base of the finger
     const mcpIndex = fingerIndex * 4 + 1;
     // Joints
@@ -306,71 +332,22 @@ class MockInputProvider {
     // Tip of the finger
     const tipIndex = fingerIndex * 4 + 4;
 
-    // Default is to point upward
-    let angleX = 0;
-    let angleY = Math.PI * 0.5; // Point up
+    // Position finger joints along a straight line extending from wrist
+    const direction = fingerIndex - 2.5; // Spread fingers apart
+    const angle = Math.PI * (0.5 + direction * 0.15); // Angle from wrist
 
-    // Adjust angles based on direction
-    switch (direction) {
-      case 'right':
-        angleX = 0;
-        angleY = 0; // Point right
-        break;
-      case 'left':
-        angleX = 0;
-        angleY = Math.PI; // Point left
-        break;
-      case 'down':
-        angleX = 0;
-        angleY = -Math.PI * 0.5; // Point down
-        break;
-      case 'up':
-      default:
-        // Default is already up
-        break;
-    }
+    // Set joint positions to create extended finger
+    landmarks[mcpIndex].x = wrist.x + Math.cos(angle) * 0.05;
+    landmarks[mcpIndex].y = wrist.y - Math.sin(angle) * 0.05;
 
-    // Direction factor for finger spread
-    const direction2 = fingerIndex - 2.5; // Spread fingers apart
-    const fingerAngle = Math.PI * (0.5 + direction2 * 0.1); // Angle between fingers
+    landmarks[pipIndex].x = landmarks[mcpIndex].x + Math.cos(angle) * 0.03;
+    landmarks[pipIndex].y = landmarks[mcpIndex].y - Math.sin(angle) * 0.03;
 
-    // Calculate lengths for joints
-    const mcpLength = 0.05;
-    const pipLength = 0.03;
-    const dipLength = 0.02;
-    const tipLength = 0.02;
+    landmarks[dipIndex].x = landmarks[pipIndex].x + Math.cos(angle) * 0.02;
+    landmarks[dipIndex].y = landmarks[pipIndex].y - Math.sin(angle) * 0.02;
 
-    // If we're pointing up or down, spread fingers apart horizontally
-    // If pointing left or right, spread fingers apart vertically
-    if (direction === 'up' || direction === 'down') {
-      // Set joint positions to create extended finger with horizontal spread
-      landmarks[mcpIndex].x = wrist.x + Math.cos(fingerAngle) * mcpLength;
-      landmarks[mcpIndex].y = wrist.y - Math.sin(angleY) * mcpLength;
-
-      landmarks[pipIndex].x = landmarks[mcpIndex].x + Math.cos(fingerAngle) * pipLength * 0.3;
-      landmarks[pipIndex].y = landmarks[mcpIndex].y - Math.sin(angleY) * pipLength;
-
-      landmarks[dipIndex].x = landmarks[pipIndex].x + Math.cos(fingerAngle) * dipLength * 0.2;
-      landmarks[dipIndex].y = landmarks[pipIndex].y - Math.sin(angleY) * dipLength;
-
-      landmarks[tipIndex].x = landmarks[dipIndex].x + Math.cos(fingerAngle) * tipLength * 0.1;
-      landmarks[tipIndex].y = landmarks[dipIndex].y - Math.sin(angleY) * tipLength;
-    } else {
-      // Set joint positions for left/right pointing with vertical spread
-      landmarks[mcpIndex].x = wrist.x + Math.cos(angleY) * mcpLength;
-      landmarks[mcpIndex].y = wrist.y + Math.sin(fingerAngle) * mcpLength * 0.3;
-
-      landmarks[pipIndex].x = landmarks[mcpIndex].x + Math.cos(angleY) * pipLength;
-      landmarks[pipIndex].y = landmarks[mcpIndex].y + Math.sin(fingerAngle) * pipLength * 0.2;
-
-      landmarks[dipIndex].x = landmarks[pipIndex].x + Math.cos(angleY) * dipLength;
-      landmarks[dipIndex].y = landmarks[pipIndex].y + Math.sin(fingerAngle) * dipLength * 0.1;
-
-      landmarks[tipIndex].x = landmarks[dipIndex].x + Math.cos(angleY) * tipLength;
-      landmarks[tipIndex].y = landmarks[dipIndex].y + Math.sin(fingerAngle) * tipLength * 0.05;
-    }
-
-    // Forward/backward is handled separately in updateFingerPositions by adjusting z values
+    landmarks[tipIndex].x = landmarks[dipIndex].x + Math.cos(angle) * 0.02;
+    landmarks[tipIndex].y = landmarks[dipIndex].y - Math.sin(angle) * 0.02;
   }
 
   /**
@@ -429,10 +406,9 @@ class MockInputProvider {
     // Get current gesture
     const currentGesture = this.gestures[this.currentGestureIndex];
 
-    // Draw text showing current gesture with direction for pointing
+    // Draw text showing current gesture
     this.ctx.fillStyle = '#fff';
     this.ctx.font = '20px Arial';
-
     if (currentGesture.name === 'point') {
       this.ctx.fillText(`Mock Hand: ${currentGesture.name} ${currentGesture.direction}`, 20, 30);
     } else {
