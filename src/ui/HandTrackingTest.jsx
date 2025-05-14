@@ -1,5 +1,5 @@
 // src/ui/HandTrackingTest.jsx
-// UPDATED VERSION TO DISPLAY POINTING DIRECTION
+// UPDATED FOR FORWARD POINTING TESTING
 
 import React, { useEffect, useRef, useState } from 'react';
 import InputManager from '../core/input/input-manager'; // Fixed import path
@@ -14,6 +14,7 @@ function HandTrackingTest() {
   const [provider, setProvider] = useState('mediapipe');
   const [error, setError] = useState(null);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [pointingInfo, setPointingInfo] = useState(null); // Store detailed pointing info
 
   // Initialize input manager
   useEffect(() => {
@@ -102,6 +103,7 @@ function HandTrackingTest() {
         await inputManager.stopTracking();
         setIsTracking(false);
         setDetectedGesture('None');
+        setPointingInfo(null);
       } else {
         if (videoRef.current) {
           inputManager.setVideoElement(videoRef.current);
@@ -112,13 +114,33 @@ function HandTrackingTest() {
           });
 
           // Register gesture detection callback with enhanced display
-          inputManager.onGestureDetected((gesture, handedness) => {
+          inputManager.onGestureDetected((gesture, handedness, landmarks) => {
             // Format the detected gesture with additional details
             let displayText = `${gesture.name} (${handedness})`;
 
             // Add direction for pointing gesture
             if (gesture.name === 'point' && gesture.direction) {
               displayText = `${gesture.name} ${gesture.direction} (${handedness})`;
+
+              // Store extra pointing debug info
+              if (landmarks && landmarks.length > 0) {
+                const wrist = landmarks[0];
+                const indexTip = landmarks[8];
+                if (wrist && indexTip) {
+                  const dx = indexTip.x - wrist.x;
+                  const dy = indexTip.y - wrist.y;
+                  const dz = indexTip.z - wrist.z;
+
+                  setPointingInfo({
+                    dx: dx.toFixed(3),
+                    dy: dy.toFixed(3),
+                    dz: dz.toFixed(3),
+                    direction: gesture.direction
+                  });
+                }
+              }
+            } else {
+              setPointingInfo(null);
             }
 
             setDetectedGesture(displayText);
@@ -151,6 +173,7 @@ function HandTrackingTest() {
     setProvider(prev => prev === 'mediapipe' ? 'mock' : 'mediapipe');
     setIsTracking(false);
     setDetectedGesture('None');
+    setPointingInfo(null);
     setError(null);
   };
 
@@ -243,6 +266,19 @@ function HandTrackingTest() {
 
       <div className="gesture-display">
         <p>Detected Gesture: <strong>{detectedGesture}</strong></p>
+
+        {/* Display pointing debug info */}
+        {pointingInfo && (
+          <div className="pointing-debug">
+            <p>Pointing Debug:</p>
+            <ul>
+              <li>X difference: {pointingInfo.dx}</li>
+              <li>Y difference: {pointingInfo.dy}</li>
+              <li>Z difference: {pointingInfo.dz}</li>
+              <li>Direction: {pointingInfo.direction}</li>
+            </ul>
+          </div>
+        )}
       </div>
 
       <div className="video-container">
@@ -261,7 +297,8 @@ function HandTrackingTest() {
       <div className="instructions">
         <h3>Try these gestures:</h3>
         <ul>
-          <li><strong>Point:</strong> Extend only your index finger. Now shows direction (up, down, left, right)!</li>
+          <li><strong>Point:</strong> Extend only your index finger. Now shows direction (up, down, left, right, forward, backward)!</li>
+          <li><strong>Forward point:</strong> Point directly at the camera with your index finger</li>
           <li><strong>Open:</strong> Spread all your fingers</li>
           <li><strong>Grab:</strong> Make a fist</li>
           <li><strong>Wave:</strong> Move your open hand side to side</li>

@@ -1,5 +1,5 @@
 // src/core/input/providers/mediapipe.js
-// IMPROVED DIRECTIONAL POINTING VERSION
+// IMPROVED FORWARD POINTING DETECTION - CONTINUED
 
 /**
  * MediaPipe Provider
@@ -26,6 +26,9 @@ class MediaPipeProvider {
     this.waveDirectionChanges = {};
     this.waveStartTime = {};
     this.waveLastDirection = {};
+
+    // Debug mode - set to true to enable console logging
+    this.debugMode = true;
   }
 
   /**
@@ -352,9 +355,30 @@ class MediaPipeProvider {
       // Calculate pointing direction (relative to wrist)
       const dx = indexTip.x - wrist.x;
       const dy = indexTip.y - wrist.y;
+      const dz = indexTip.z - wrist.z;
 
-      // Determine primary direction of pointing
-      if (Math.abs(dx) > Math.abs(dy)) {
+      // Log coordinates for debugging if enabled
+      if (this.debugMode) {
+        console.log(`Point vector: dx=${dx.toFixed(3)}, dy=${dy.toFixed(3)}, dz=${dz.toFixed(3)}`);
+      }
+
+      // Calculate magnitudes in different planes
+      const horizontalMag = Math.abs(dx);
+      const verticalMag = Math.abs(dy);
+      const depthMag = Math.abs(dz);
+
+      // Forward detection is most important - reduce threshold to make it easier to detect
+      // For improved forward detection, check if z-component is significant
+      if (depthMag > 0.05 && depthMag > horizontalMag * 0.5 && depthMag > verticalMag * 0.5) {
+        // Pointing toward or away from the camera
+        pointingDirection = dz < 0 ? 'forward' : 'backward';
+
+        if (this.debugMode) {
+          console.log(`Detected ${pointingDirection} pointing with z=${dz.toFixed(3)}`);
+        }
+      }
+      // If not primarily in z-direction, determine the primary 2D direction
+      else if (horizontalMag > verticalMag) {
         // Pointing horizontally
         pointingDirection = dx > 0 ? 'right' : 'left';
       } else {
@@ -365,7 +389,8 @@ class MediaPipeProvider {
       return {
         name: 'point',
         direction: pointingDirection,
-        confidence: 0.9
+        confidence: 0.9,
+        vector: { dx, dy, dz } // Include vector for debugging
       };
     }
 
