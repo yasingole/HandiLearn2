@@ -1,5 +1,5 @@
 // src/core/input/providers/mediapipe.js
-// COMPLETE VERSION WITH DIAGONAL POINTING DIRECTIONS
+// ENHANCED VERSION WITH DIAGONAL DIRECTIONS AND PINCH GESTURE
 
 /**
  * MediaPipe Provider
@@ -26,6 +26,10 @@ class MediaPipeProvider {
     this.waveDirectionChanges = {};
     this.waveStartTime = {};
     this.waveLastDirection = {};
+
+    // For pinch detection
+    this.lastPinchDistance = {};
+    this.isPinching = {};
 
     // Debug mode - set to true to enable console logging
     this.debugMode = true;
@@ -124,6 +128,8 @@ class MediaPipeProvider {
         this.waveDirectionChanges = {};
         this.waveStartTime = {};
         this.waveLastDirection = {};
+        this.lastPinchDistance = {};
+        this.isPinching = {};
 
         console.log('MediaPipe hand tracking started');
         return true;
@@ -162,6 +168,8 @@ class MediaPipeProvider {
       this.waveDirectionChanges = {};
       this.waveStartTime = {};
       this.waveLastDirection = {};
+      this.lastPinchDistance = {};
+      this.isPinching = {};
 
       console.log('MediaPipe hand tracking stopped');
       return true;
@@ -215,8 +223,8 @@ class MediaPipeProvider {
         const handedness = multiHandedness[handIndex].label; // 'Left' or 'Right'
         const handId = `${handedness}_${handIndex}`;
 
-        // First detect static gestures (point, open, grab)
-        const staticGesture = this.detectStaticGesture(landmarks, handedness);
+        // First detect static gestures (point, open, grab, pinch)
+        const staticGesture = this.detectStaticGesture(landmarks, handedness, handId);
 
         // Detect wave gesture (temporal pattern)
         this.detectWaveGesture(landmarks[0], handId, handedness);
@@ -327,24 +335,61 @@ class MediaPipeProvider {
   }
 
   /**
-   * Detect static gestures (point, open, grab) with direction information
+   * Detect static gestures (point, open, grab, pinch) with direction information
    * @param {Array} landmarks - Hand landmarks from MediaPipe
    * @param {String} handedness - 'Left' or 'Right'
+   * @param {String} handId - Unique identifier for this hand
    * @returns {Object|null} - Detected gesture or null
    */
-  detectStaticGesture(landmarks, handedness) {
+  detectStaticGesture(landmarks, handedness, handId) {
     // Enhanced finger extension detection specifically for pointing gestures
     const indexFingerExtended = this.isFingerExtendedImproved(landmarks, 1);
     const middleFingerExtended = this.isFingerExtendedImproved(landmarks, 2);
     const ringFingerExtended = this.isFingerExtendedImproved(landmarks, 3);
     const pinkyFingerExtended = this.isFingerExtendedImproved(landmarks, 4);
 
-    // Get the wrist and index finger tip
+    // Get the wrist and important finger landmarks
     const wrist = landmarks[0];
     const indexTip = landmarks[8];
+    const thumbTip = landmarks[4];
 
-    // For pointing direction detection
-    let pointingDirection = null;
+    // PINCH gesture - thumb and index finger close together
+    const thumbIndexDistance = this.distance3D(thumbTip, indexTip);
+
+    // Initialize pinch detection state for this hand if needed
+    if (this.lastPinchDistance[handId] === undefined) {
+      this.lastPinchDistance[handId] = thumbIndexDistance;
+      this.isPinching[handId] = false;
+    }
+
+    // Pinch thresholds
+    const PINCH_DISTANCE_THRESHOLD = 0.05; // How close thumb and index need to be to detect pinch
+    const PINCH_STATE_CHANGE_THRESHOLD = 0.02; // How much distance needs to change to switch pinch state
+
+    // Detect pinch gesture
+    const wasPinching = this.isPinching[handId];
+    const distanceDelta = this.lastPinchDistance[handId] - thumbIndexDistance;
+
+    // Check for significant distance change to avoid flickering
+    if (!wasPinching && thumbIndexDistance < PINCH_DISTANCE_THRESHOLD) {
+      // Start pinching
+      this.isPinching[handId] = true;
+    } else if (wasPinching && thumbIndexDistance > PINCH_DISTANCE_THRESHOLD + PINCH_STATE_CHANGE_THRESHOLD) {
+      // Stop pinching when fingers move significantly apart
+      this.isPinching[handId] = false;
+    }
+
+    // Update last distance
+    this.lastPinchDistance[handId] = thumbIndexDistance;
+
+    // If pinching, return pinch gesture
+    if (this.isPinching[handId]) {
+      return {
+        name: 'pinch',
+        strength: Math.max(0, 1 - thumbIndexDistance / PINCH_DISTANCE_THRESHOLD),
+        confidence: 0.9
+      };
+    }
 
     // POINT gesture - only index finger extended
     if (indexFingerExtended &&
@@ -366,6 +411,9 @@ class MediaPipeProvider {
       const horizontalMag = Math.abs(dx);
       const verticalMag = Math.abs(dy);
       const depthMag = Math.abs(dz);
+
+      // For pointing direction detection
+      let pointingDirection = null;
 
       // Forward detection is most important - reduce threshold to make it easier to detect
       // For improved forward detection, check if z-component is significant
@@ -560,7 +608,6 @@ class MediaPipeProvider {
     return a.x * b.x + a.y * b.y + a.z * b.z;
   }
 
-  
   /**
    * Calculate 3D distance between two points
    * @param {Object} a - First point with x,y,z coordinates

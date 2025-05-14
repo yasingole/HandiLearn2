@@ -1,108 +1,182 @@
-// src/core/input/providers/mock.js
-// UPDATED WITH DIAGONAL AND FORWARD POINTING DIRECTIONS
+// src/core/input/providers/mediapipe.js
+// ENHANCED VERSION WITH DIAGONAL DIRECTIONS AND PINCH GESTURE
 
 /**
- * Mock Input Provider
- * Simulates hand tracking for testing without a camera
- * Provides predictable hand data for testing interactions
+ * MediaPipe Provider
+ * Uses MediaPipe Hands API to track hand landmarks and detect gestures
  */
-class MockInputProvider {
+import { Hands } from '@mediapipe/hands';
+
+class MediaPipeProvider {
   constructor() {
+    this.hands = null;
+    this.videoElement = null;
     this.isInitialized = false;
     this.isTracking = false;
     this.handUpdateCallbacks = [];
     this.gestureCallbacks = [];
-    this.animationFrameId = null;
-    this.videoElement = null;
 
-    // Simulated hand landmarks (23 points per hand)
-    this.simulatedHands = {
-      right: this.generateHandLandmarks('Right'),
-      left: this.generateHandLandmarks('Left'),
-    };
+    // For gesture detection
+    this.lastGesture = {};
+    this.lastGestureTime = {};
+    this.gestureConfidence = {};
 
-    // Supported gestures for simulation with more pointing directions
-    this.gestures = [
-      { name: 'point', direction: 'forward', handedness: 'Right', duration: 2000 },
-      { name: 'point', direction: 'right', handedness: 'Right', duration: 2000 },
-      { name: 'point', direction: 'left', handedness: 'Right', duration: 2000 },
-      { name: 'point', direction: 'up', handedness: 'Right', duration: 2000 },
-      { name: 'point', direction: 'down', handedness: 'Right', duration: 2000 },
-      { name: 'point', direction: 'top-right', handedness: 'Right', duration: 2000 },
-      { name: 'point', direction: 'top-left', handedness: 'Right', duration: 2000 },
-      { name: 'point', direction: 'bottom-right', handedness: 'Right', duration: 2000 },
-      { name: 'point', direction: 'bottom-left', handedness: 'Right', duration: 2000 },
-      { name: 'open', handedness: 'Right', duration: 2000 },
-      { name: 'grab', handedness: 'Right', duration: 2000 },
-      { name: 'wave', handedness: 'Right', duration: 2000 },
-    ];
+    // For wave detection
+    this.wavePositions = {};
+    this.waveDirectionChanges = {};
+    this.waveStartTime = {};
+    this.waveLastDirection = {};
 
-    // Current gesture index for cycling through gestures
-    this.currentGestureIndex = 0;
-    this.lastGestureTime = 0;
+    // For pinch detection
+    this.lastPinchDistance = {};
+    this.isPinching = {};
+
+    // Debug mode - set to true to enable console logging
+    this.debugMode = true;
   }
 
   /**
-   * Initialize the mock provider
+   * Initialize the MediaPipe Hands API
    * @returns {Promise} - Resolves when initialized
    */
   async initialize() {
-    this.isInitialized = true;
-    console.log('Mock input provider initialized');
-    return Promise.resolve(true);
+    try {
+      this.hands = new Hands({
+        locateFile: (file) => {
+          return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+        }
+      });
+
+      // Configure MediaPipe Hands
+      await this.hands.setOptions({
+        maxNumHands: 2,
+        modelComplexity: 1, // 0: Light, 1: Full
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+      });
+
+      // Set up result handler
+      this.hands.onResults(results => this.handleResults(results));
+
+      this.isInitialized = true;
+      console.log('MediaPipe Hands initialized successfully');
+      return true;
+    } catch (error) {
+      console.error('Failed to initialize MediaPipe Hands:', error);
+      throw error;
+    }
   }
 
   /**
-   * Set video element (for consistency with other providers, not used)
+   * Set video element to use for tracking
    * @param {HTMLVideoElement} videoElement - The video element
    */
   setVideoElement(videoElement) {
     this.videoElement = videoElement;
-
-    // Create a canvas to draw simulated hand data
-    if (videoElement) {
-      this.canvas = document.createElement('canvas');
-      this.canvas.width = 640;
-      this.canvas.height = 480;
-      this.ctx = this.canvas.getContext('2d');
-
-      // Replace video source with canvas for visualization
-      this.videoElement.srcObject = this.canvas.captureStream();
-    }
   }
 
   /**
-   * Start simulating hand tracking
+   * Start tracking hand movements
    * @returns {Promise} - Resolves when tracking has started
    */
   async startTracking() {
     if (!this.isInitialized) {
-      throw new Error('Mock provider not initialized');
+      throw new Error('MediaPipe provider not initialized');
     }
 
-    if (this.isTracking) return; // Already tracking
+    if (this.isTracking) {
+      return; // Already tracking
+    }
 
-    this.isTracking = true;
-    this.simulateTracking();
-    console.log('Mock hand tracking started');
-    return Promise.resolve(true);
+    try {
+      if (!this.videoElement) {
+        throw new Error('Video element not set. Call setVideoElement() first.');
+      }
+
+      // Start the camera feed
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user' }
+        });
+
+        this.videoElement.srcObject = stream;
+        this.videoElement.play();
+
+        // Wait for video to be ready
+        await new Promise(resolve => {
+          this.videoElement.onloadedmetadata = () => resolve();
+          // If video is already loaded, resolve immediately
+          if (this.videoElement.readyState >= 2) resolve();
+        });
+
+        // Create a function to process each frame
+        const processFrame = async () => {
+          if (!this.isTracking) return;
+
+          await this.hands.send({ image: this.videoElement });
+          requestAnimationFrame(processFrame);
+        };
+
+        this.isTracking = true;
+        processFrame();
+
+        // Reset gesture detection state
+        this.lastGesture = {};
+        this.lastGestureTime = {};
+        this.gestureConfidence = {};
+        this.wavePositions = {};
+        this.waveDirectionChanges = {};
+        this.waveStartTime = {};
+        this.waveLastDirection = {};
+        this.lastPinchDistance = {};
+        this.isPinching = {};
+
+        console.log('MediaPipe hand tracking started');
+        return true;
+      } else {
+        throw new Error('getUserMedia not supported in this browser');
+      }
+    } catch (error) {
+      console.error('Failed to start hand tracking:', error);
+      this.isTracking = false;
+      throw error;
+    }
   }
 
   /**
-   * Stop simulating hand tracking
+   * Stop tracking hand movements
    * @returns {Promise} - Resolves when tracking has stopped
    */
   async stopTracking() {
     if (!this.isTracking) return;
 
-    this.isTracking = false;
-    if (this.animationFrameId) {
-      cancelAnimationFrame(this.animationFrameId);
-      this.animationFrameId = null;
-    }
+    try {
+      this.isTracking = false;
 
-    console.log('Mock hand tracking stopped');
-    return Promise.resolve(true);
+      // Stop all video tracks
+      if (this.videoElement && this.videoElement.srcObject) {
+        const tracks = this.videoElement.srcObject.getTracks();
+        tracks.forEach(track => track.stop());
+        this.videoElement.srcObject = null;
+      }
+
+      // Reset gesture detection state
+      this.lastGesture = {};
+      this.lastGestureTime = {};
+      this.gestureConfidence = {};
+      this.wavePositions = {};
+      this.waveDirectionChanges = {};
+      this.waveStartTime = {};
+      this.waveLastDirection = {};
+      this.lastPinchDistance = {};
+      this.isPinching = {};
+
+      console.log('MediaPipe hand tracking stopped');
+      return true;
+    } catch (error) {
+      console.error('Error stopping hand tracking:', error);
+      throw error;
+    }
   }
 
   /**
@@ -130,405 +204,423 @@ class MockInputProvider {
   }
 
   /**
-   * Simulate hand tracking and generate updates
+   * Handle results from MediaPipe Hands
+   * @param {Object} results - Results from MediaPipe Hands
    */
-  simulateTracking() {
-    if (!this.isTracking) return;
+  handleResults(results) {
+    if (!results || !results.multiHandLandmarks) return;
 
-    // Update hand positions based on time
-    this.updateHandPositions();
-
-    // Generate fake results similar to MediaPipe structure
-    const results = {
-      multiHandLandmarks: [this.simulatedHands.right],
-      multiHandedness: [{ label: 'Right', score: 0.95 }]
-    };
+    const { multiHandLandmarks, multiHandedness } = results;
 
     // Notify all hand update callbacks
     if (this.handUpdateCallbacks.length > 0) {
       this.handUpdateCallbacks.forEach(callback => callback(results));
     }
 
-    // Simulate gesture detection
-    this.simulateGestures(results);
+    // Process gestures
+    if (this.gestureCallbacks.length > 0 && multiHandLandmarks.length > 0) {
+      multiHandLandmarks.forEach((landmarks, handIndex) => {
+        const handedness = multiHandedness[handIndex].label; // 'Left' or 'Right'
+        const handId = `${handedness}_${handIndex}`;
 
-    // Draw visualization if video element exists
-    if (this.ctx) {
-      this.drawVisualization(results);
-    }
+        // First detect static gestures (point, open, grab, pinch)
+        const staticGesture = this.detectStaticGesture(landmarks, handedness, handId);
 
-    // Continue simulation loop
-    this.animationFrameId = requestAnimationFrame(() => this.simulateTracking());
-  }
+        // Detect wave gesture (temporal pattern)
+        this.detectWaveGesture(landmarks[0], handId, handedness);
 
-  /**
-   * Update hand landmark positions to simulate movement
-   */
-  updateHandPositions() {
-    const now = Date.now();
-    const time = now / 1000; // time in seconds
+        // Report static gesture if detected and different from last time
+        if (staticGesture &&
+            (this.lastGesture[handId] !== staticGesture.name ||
+             Date.now() - this.lastGestureTime[handId] > 500)) {
 
-    // Move the hands in a circular pattern
-    const radius = 0.1;
-    const centerX = 0.5;
-    const centerY = 0.5;
-
-    // Different animation for each hand
-    this.simulatedHands.right.forEach(point => {
-      // Add a circular motion to the hand
-      point.x = centerX + radius * Math.cos(time);
-      point.y = centerY + radius * Math.sin(time);
-
-      // Add some noise to make it more realistic
-      point.x += (Math.random() - 0.5) * 0.01;
-      point.y += (Math.random() - 0.5) * 0.01;
-    });
-
-    // Simulate different finger positions based on current gesture
-    const currentGesture = this.gestures[this.currentGestureIndex];
-
-    // Check if it's time to switch to the next gesture
-    if (now - this.lastGestureTime > currentGesture.duration) {
-      this.currentGestureIndex = (this.currentGestureIndex + 1) % this.gestures.length;
-      this.lastGestureTime = now;
-
-      // Notify about the gesture change
-      if (this.gestureCallbacks.length > 0) {
-        const newGesture = this.gestures[this.currentGestureIndex];
-        this.gestureCallbacks.forEach(callback => {
-          callback(
-            {
-              name: newGesture.name,
-              direction: newGesture.direction,
-              confidence: 0.9
-            },
-            newGesture.handedness,
-            this.simulatedHands[newGesture.handedness.toLowerCase()]
-          );
-        });
-      }
-    }
-
-    // Adjust finger positions based on current gesture
-    this.updateFingerPositions(this.simulatedHands.right, currentGesture.name, currentGesture.direction);
-  }
-
-  /**
-   * Update finger positions to simulate specific gestures with direction
-   * @param {Array} landmarks - Hand landmarks to update
-   * @param {String} gesture - Gesture name to simulate
-   * @param {String} direction - Direction for pointing gesture
-   */
-  updateFingerPositions(landmarks, gesture, direction) {
-    // Finger indices:
-    // Thumb: 1-4
-    // Index: 5-8
-    // Middle: 9-12
-    // Ring: 13-16
-    // Pinky: 17-20
-
-    const wrist = landmarks[0];
-
-    if (gesture === 'point') {
-      // First set up basic point gesture with index finger extended
-      this.extendFinger(landmarks, 1, wrist);
-      this.curlFinger(landmarks, 2, wrist);
-      this.curlFinger(landmarks, 3, wrist);
-      this.curlFinger(landmarks, 4, wrist);
-
-      // Now adjust the direction based on the specified direction
-      const indexTip = landmarks[8]; // Index fingertip
-
-      // Default offset values for each direction
-      let offsetX = 0;
-      let offsetY = 0;
-      let offsetZ = 0;
-
-      // Adjust offsets based on direction
-      switch(direction) {
-        case 'right':
-          offsetX = 0.1;
-          break;
-        case 'left':
-          offsetX = -0.1;
-          break;
-        case 'up':
-          offsetY = -0.1;
-          break;
-        case 'down':
-          offsetY = 0.1;
-          break;
-        case 'top-right':
-          offsetX = 0.07;
-          offsetY = -0.07;
-          break;
-        case 'top-left':
-          offsetX = -0.07;
-          offsetY = -0.07;
-          break;
-        case 'bottom-right':
-          offsetX = 0.07;
-          offsetY = 0.07;
-          break;
-        case 'bottom-left':
-          offsetX = -0.07;
-          offsetY = 0.07;
-          break;
-        case 'forward':
-          offsetZ = -0.05;
-          break;
-        case 'backward':
-          offsetZ = 0.05;
-          break;
-      }
-
-      // Apply the offsets to point in the right direction
-      indexTip.x = wrist.x + offsetX;
-      indexTip.y = wrist.y + offsetY;
-      indexTip.z = wrist.z + offsetZ;
-
-    } else if (gesture === 'open') {
-      // All fingers extended
-      this.extendFinger(landmarks, 1, wrist);
-      this.extendFinger(landmarks, 2, wrist);
-      this.extendFinger(landmarks, 3, wrist);
-      this.extendFinger(landmarks, 4, wrist);
-
-    } else if (gesture === 'grab') {
-      // All fingers curled
-      this.curlFinger(landmarks, 1, wrist);
-      this.curlFinger(landmarks, 2, wrist);
-      this.curlFinger(landmarks, 3, wrist);
-      this.curlFinger(landmarks, 4, wrist);
-
-    } else if (gesture === 'wave') {
-      // Similar to open hand but with more side-to-side movement
-      this.extendFinger(landmarks, 1, wrist);
-      this.extendFinger(landmarks, 2, wrist);
-      this.extendFinger(landmarks, 3, wrist);
-      this.extendFinger(landmarks, 4, wrist);
-
-      // Add side-to-side motion
-      const time = Date.now() / 200;
-      const sideOffset = Math.sin(time) * 0.1;
-      landmarks.forEach(point => {
-        point.x += sideOffset;
+          this.notifyGesture(staticGesture, handedness, landmarks);
+          this.lastGesture[handId] = staticGesture.name;
+          this.lastGestureTime[handId] = Date.now();
+        }
       });
     }
   }
 
   /**
-   * Extend a finger in the simulated hand
-   * @param {Array} landmarks - Hand landmarks
-   * @param {Number} fingerIndex - Index of the finger (1=index, 2=middle, 3=ring, 4=pinky)
-   * @param {Object} wrist - Wrist landmark
-   */
-  extendFinger(landmarks, fingerIndex, wrist) {
-    // Base of the finger
-    const mcpIndex = fingerIndex * 4 + 1;
-    // Joints
-    const pipIndex = fingerIndex * 4 + 2;
-    const dipIndex = fingerIndex * 4 + 3;
-    // Tip of the finger
-    const tipIndex = fingerIndex * 4 + 4;
-
-    // Position finger joints along a straight line extending from wrist
-    const direction = fingerIndex - 2.5; // Spread fingers apart
-    const angle = Math.PI * (0.5 + direction * 0.15); // Angle from wrist
-
-    // Set joint positions to create extended finger
-    landmarks[mcpIndex].x = wrist.x + Math.cos(angle) * 0.05;
-    landmarks[mcpIndex].y = wrist.y - Math.sin(angle) * 0.05;
-
-    landmarks[pipIndex].x = landmarks[mcpIndex].x + Math.cos(angle) * 0.03;
-    landmarks[pipIndex].y = landmarks[mcpIndex].y - Math.sin(angle) * 0.03;
-
-    landmarks[dipIndex].x = landmarks[pipIndex].x + Math.cos(angle) * 0.02;
-    landmarks[dipIndex].y = landmarks[pipIndex].y - Math.sin(angle) * 0.02;
-
-    landmarks[tipIndex].x = landmarks[dipIndex].x + Math.cos(angle) * 0.02;
-    landmarks[tipIndex].y = landmarks[dipIndex].y - Math.sin(angle) * 0.02;
-  }
-
-  /**
-   * Curl a finger in the simulated hand
-   * @param {Array} landmarks - Hand landmarks
-   * @param {Number} fingerIndex - Index of the finger (1=index, 2=middle, 3=ring, 4=pinky)
-   * @param {Object} wrist - Wrist landmark
-   */
-  curlFinger(landmarks, fingerIndex, wrist) {
-    // Base of the finger
-    const mcpIndex = fingerIndex * 4 + 1;
-    // Joints
-    const pipIndex = fingerIndex * 4 + 2;
-    const dipIndex = fingerIndex * 4 + 3;
-    // Tip of the finger
-    const tipIndex = fingerIndex * 4 + 4;
-
-    // Position finger joints to create a curled finger
-    const direction = fingerIndex - 2.5; // Spread fingers apart
-    const angle = Math.PI * (0.5 + direction * 0.1); // Angle from wrist
-
-    // Set joint positions with a curve toward palm
-    landmarks[mcpIndex].x = wrist.x + Math.cos(angle) * 0.03;
-    landmarks[mcpIndex].y = wrist.y - Math.sin(angle) * 0.03;
-
-    // PIP joint bends inward
-    landmarks[pipIndex].x = landmarks[mcpIndex].x + Math.cos(angle) * 0.02;
-    landmarks[pipIndex].y = landmarks[mcpIndex].y - Math.sin(angle) * 0.02;
-
-    // DIP joint curls further
-    landmarks[dipIndex].x = landmarks[pipIndex].x + Math.cos(angle + 0.3) * 0.015;
-    landmarks[dipIndex].y = landmarks[pipIndex].y - Math.sin(angle - 0.3) * 0.015;
-
-    // Tip bends all the way toward palm
-    landmarks[tipIndex].x = landmarks[dipIndex].x + Math.cos(angle + 0.6) * 0.01;
-    landmarks[tipIndex].y = landmarks[dipIndex].y - Math.sin(angle - 0.6) * 0.01;
-  }
-
-  /**
-   * Draw visualization of the hand landmarks on canvas
-   * @param {Object} results - Hand tracking results
-   */
-  drawVisualization(results) {
-    if (!this.ctx) return;
-
-    const { width, height } = this.canvas;
-
-    // Clear canvas
-    this.ctx.fillStyle = '#333';
-    this.ctx.fillRect(0, 0, width, height);
-
-    // Draw a placeholder rectangle
-    this.ctx.fillStyle = '#555';
-    this.ctx.fillRect(width * 0.1, height * 0.1, width * 0.8, height * 0.8);
-
-    // Get current gesture
-    const currentGesture = this.gestures[this.currentGestureIndex];
-
-    // Draw text showing current gesture
-    this.ctx.fillStyle = '#fff';
-    this.ctx.font = '20px Arial';
-    if (currentGesture.name === 'point') {
-      this.ctx.fillText(`Mock Hand: ${currentGesture.name} ${currentGesture.direction}`, 20, 30);
-    } else {
-      this.ctx.fillText(`Mock Hand: ${currentGesture.name}`, 20, 30);
-    }
-
-    // Draw hand landmarks if available
-    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-      results.multiHandLandmarks.forEach(landmarks => {
-        // Draw hand connections
-        this.drawHandConnections(landmarks, width, height);
-
-        // Draw landmarks
-        landmarks.forEach(landmark => {
-          this.ctx.fillStyle = '#00ff00';
-          this.ctx.beginPath();
-          this.ctx.arc(
-            landmark.x * width,
-            landmark.y * height,
-            5,
-            0,
-            2 * Math.PI
-          );
-          this.ctx.fill();
-        });
-      });
-    }
-  }
-
-  /**
-   * Draw connections between hand landmarks to visualize hand structure
-   * @param {Array} landmarks - Hand landmarks
-   * @param {Number} width - Canvas width
-   * @param {Number} height - Canvas height
-   */
-  drawHandConnections(landmarks, width, height) {
-    if (!landmarks || landmarks.length < 21) return;
-
-    // Define hand connections (pairs of landmark indices that should be connected)
-    const connections = [
-      // Thumb
-      [0, 1], [1, 2], [2, 3], [3, 4],
-      // Index finger
-      [0, 5], [5, 6], [6, 7], [7, 8],
-      // Middle finger
-      [0, 9], [9, 10], [10, 11], [11, 12],
-      // Ring finger
-      [0, 13], [13, 14], [14, 15], [15, 16],
-      // Pinky
-      [0, 17], [17, 18], [18, 19], [19, 20],
-      // Palm
-      [0, 5], [5, 9], [9, 13], [13, 17]
-    ];
-
-    this.ctx.strokeStyle = '#ffffff';
-    this.ctx.lineWidth = 2;
-
-    connections.forEach(([i, j]) => {
-      this.ctx.beginPath();
-      this.ctx.moveTo(
-        landmarks[i].x * width,
-        landmarks[i].y * height
-      );
-      this.ctx.lineTo(
-        landmarks[j].x * width,
-        landmarks[j].y * height
-      );
-      this.ctx.stroke();
-    });
-  }
-
-  /**
-   * Generate initial hand landmarks
+   * Notify gesture callbacks about a detected gesture
+   * @param {Object} gesture - The detected gesture
    * @param {String} handedness - 'Left' or 'Right'
-   * @returns {Array} - Array of 21 landmarks
+   * @param {Array} landmarks - Hand landmarks
    */
-  generateHandLandmarks(handedness) {
-    // Create 21 landmarks for a hand
-    const landmarks = [];
-
-    // Basic hand shape centered in the frame
-    const centerX = 0.5;
-    const centerY = 0.5;
-
-    // Wrist position (landmark 0)
-    landmarks.push({ x: centerX, y: centerY + 0.1, z: 0 });
-
-    // Generate thumb landmarks (1-4)
-    for (let i = 0; i < 4; i++) {
-      landmarks.push({
-        x: centerX - 0.05 + (i * 0.01),
-        y: centerY + 0.08 - (i * 0.02),
-        z: 0
+  notifyGesture(gesture, handedness, landmarks) {
+    if (this.gestureCallbacks.length > 0) {
+      this.gestureCallbacks.forEach(callback => {
+        callback(gesture, handedness, landmarks);
       });
     }
-
-    // Generate finger landmarks (each finger has 4 landmarks)
-    for (let finger = 0; finger < 4; finger++) {
-      const angle = Math.PI / 2 - (finger - 1.5) * 0.2; // Spread fingers
-      const startX = centerX + (finger - 1.5) * 0.02;
-
-      for (let joint = 0; joint < 4; joint++) {
-        landmarks.push({
-          x: startX,
-          y: centerY + 0.05 - (joint * 0.025),
-          z: 0
-        });
-      }
-    }
-
-    return landmarks;
   }
 
   /**
-   * Simulate specific gestures for testing
-   * @param {Object} results - Hand tracking results
+   * Detect back-and-forth wave gesture
+   * @param {Object} wrist - Wrist landmark
+   * @param {String} handId - Unique hand identifier
+   * @param {String} handedness - 'Left' or 'Right'
    */
-  simulateGestures(results) {
-    // Already handled in updateHandPositions
+  detectWaveGesture(wrist, handId, handedness) {
+    const now = Date.now();
+
+    // Initialize wave detection state for this hand if needed
+    if (!this.wavePositions[handId]) {
+      this.wavePositions[handId] = [];
+      this.waveDirectionChanges[handId] = 0;
+      this.waveStartTime[handId] = now;
+      this.waveLastDirection[handId] = null;
+    }
+
+    // Add current position to history
+    this.wavePositions[handId].push({
+      x: wrist.x,
+      y: wrist.y,
+      time: now
+    });
+
+    // Keep only recent positions (last 2 seconds)
+    while (this.wavePositions[handId].length > 0 &&
+           now - this.wavePositions[handId][0].time > 2000) {
+      this.wavePositions[handId].shift();
+    }
+
+    // Need at least 3 positions to detect direction changes
+    if (this.wavePositions[handId].length < 3) return;
+
+    // Check if we should reset wave detection (it's been too long)
+    if (now - this.waveStartTime[handId] > 3000) {
+      this.waveDirectionChanges[handId] = 0;
+      this.waveStartTime[handId] = now;
+      this.waveLastDirection[handId] = null;
+    }
+
+    // Get the most recent positions
+    const positions = this.wavePositions[handId];
+    const current = positions[positions.length - 1];
+    const previous = positions[positions.length - 3]; // Skip one position to reduce noise
+
+    // Calculate horizontal movement
+    const deltaX = current.x - previous.x;
+
+    // Skip if movement is too small
+    if (Math.abs(deltaX) < 0.03) return;
+
+    // Determine direction (simplify to left/right)
+    const direction = deltaX > 0 ? 'right' : 'left';
+
+    // Check for direction change
+    if (this.waveLastDirection[handId] !== null &&
+        this.waveLastDirection[handId] !== direction) {
+
+      // Increment direction change counter
+      this.waveDirectionChanges[handId]++;
+
+      // If we've detected enough direction changes in the time window, it's a wave
+      if (this.waveDirectionChanges[handId] >= 2 &&
+          now - this.waveStartTime[handId] < 2000) {
+
+        // Notify about wave gesture
+        this.notifyGesture({ name: 'wave', confidence: 0.9 }, handedness, null);
+
+        // Reset wave detection after successful detection
+        this.waveDirectionChanges[handId] = 0;
+        this.waveStartTime[handId] = now + 1000; // Add cooldown
+      }
+    }
+
+    // Update last direction
+    this.waveLastDirection[handId] = direction;
+  }
+
+  /**
+   * Detect static gestures (point, open, grab, pinch) with direction information
+   * @param {Array} landmarks - Hand landmarks from MediaPipe
+   * @param {String} handedness - 'Left' or 'Right'
+   * @param {String} handId - Unique identifier for this hand
+   * @returns {Object|null} - Detected gesture or null
+   */
+  detectStaticGesture(landmarks, handedness, handId) {
+    // Enhanced finger extension detection specifically for pointing gestures
+    const indexFingerExtended = this.isFingerExtendedImproved(landmarks, 1);
+    const middleFingerExtended = this.isFingerExtendedImproved(landmarks, 2);
+    const ringFingerExtended = this.isFingerExtendedImproved(landmarks, 3);
+    const pinkyFingerExtended = this.isFingerExtendedImproved(landmarks, 4);
+
+    // Get the wrist and important finger landmarks
+    const wrist = landmarks[0];
+    const indexTip = landmarks[8];
+    const thumbTip = landmarks[4];
+
+    // PINCH gesture - thumb and index finger close together
+    const thumbIndexDistance = this.distance3D(thumbTip, indexTip);
+
+    // Initialize pinch detection state for this hand if needed
+    if (this.lastPinchDistance[handId] === undefined) {
+      this.lastPinchDistance[handId] = thumbIndexDistance;
+      this.isPinching[handId] = false;
+    }
+
+    // Pinch thresholds
+    const PINCH_DISTANCE_THRESHOLD = 0.05; // How close thumb and index need to be to detect pinch
+    const PINCH_STATE_CHANGE_THRESHOLD = 0.02; // How much distance needs to change to switch pinch state
+
+    // Detect pinch gesture
+    const wasPinching = this.isPinching[handId];
+    const distanceDelta = this.lastPinchDistance[handId] - thumbIndexDistance;
+
+    // Check for significant distance change to avoid flickering
+    if (!wasPinching && thumbIndexDistance < PINCH_DISTANCE_THRESHOLD) {
+      // Start pinching
+      this.isPinching[handId] = true;
+    } else if (wasPinching && thumbIndexDistance > PINCH_DISTANCE_THRESHOLD + PINCH_STATE_CHANGE_THRESHOLD) {
+      // Stop pinching when fingers move significantly apart
+      this.isPinching[handId] = false;
+    }
+
+    // Update last distance
+    this.lastPinchDistance[handId] = thumbIndexDistance;
+
+    // If pinching, return pinch gesture
+    if (this.isPinching[handId]) {
+      return {
+        name: 'pinch',
+        strength: Math.max(0, 1 - thumbIndexDistance / PINCH_DISTANCE_THRESHOLD),
+        confidence: 0.9
+      };
+    }
+
+    // POINT gesture - only index finger extended
+    if (indexFingerExtended &&
+        !middleFingerExtended &&
+        !ringFingerExtended &&
+        !pinkyFingerExtended) {
+
+      // Calculate pointing direction (relative to wrist)
+      const dx = indexTip.x - wrist.x;
+      const dy = indexTip.y - wrist.y;
+      const dz = indexTip.z - wrist.z;
+
+      // Log coordinates for debugging if enabled
+      if (this.debugMode) {
+        console.log(`Point vector: dx=${dx.toFixed(3)}, dy=${dy.toFixed(3)}, dz=${dz.toFixed(3)}`);
+      }
+
+      // Calculate magnitudes in different planes
+      const horizontalMag = Math.abs(dx);
+      const verticalMag = Math.abs(dy);
+      const depthMag = Math.abs(dz);
+
+      // For pointing direction detection
+      let pointingDirection = null;
+
+      // Forward detection is most important - reduce threshold to make it easier to detect
+      // For improved forward detection, check if z-component is significant
+      if (depthMag > 0.05 && depthMag > horizontalMag * 0.5 && depthMag > verticalMag * 0.5) {
+        // Pointing toward or away from the camera
+        pointingDirection = dz < 0 ? 'forward' : 'backward';
+
+        if (this.debugMode) {
+          console.log(`Detected ${pointingDirection} pointing with z=${dz.toFixed(3)}`);
+        }
+      }
+      // If not pointing forward/backward, check for diagonal directions
+      else {
+        // Determine if movement is more horizontal, vertical, or diagonal
+        const isSignificantHorizontal = horizontalMag > 0.03;
+        const isSignificantVertical = verticalMag > 0.03;
+
+        // For diagonal detection, need significant components in both directions
+        if (isSignificantHorizontal && isSignificantVertical) {
+          // It's a diagonal direction - determine which quadrant
+          if (dx > 0 && dy < 0) {
+            pointingDirection = 'top-right';
+          } else if (dx < 0 && dy < 0) {
+            pointingDirection = 'top-left';
+          } else if (dx > 0 && dy > 0) {
+            pointingDirection = 'bottom-right';
+          } else if (dx < 0 && dy > 0) {
+            pointingDirection = 'bottom-left';
+          }
+        }
+        // If not diagonal, determine if it's a cardinal direction
+        else if (horizontalMag > verticalMag) {
+          // Pointing horizontally
+          pointingDirection = dx > 0 ? 'right' : 'left';
+        } else {
+          // Pointing vertically
+          pointingDirection = dy > 0 ? 'down' : 'up';
+        }
+      }
+
+      return {
+        name: 'point',
+        direction: pointingDirection,
+        confidence: 0.9,
+        vector: { dx, dy, dz } // Include vector for debugging
+      };
+    }
+
+    // OPEN hand gesture - all fingers extended
+    if (indexFingerExtended &&
+        middleFingerExtended &&
+        ringFingerExtended &&
+        pinkyFingerExtended) {
+      return { name: 'open', confidence: 0.9 };
+    }
+
+    // GRAB gesture - no fingers extended
+    if (!indexFingerExtended &&
+        !middleFingerExtended &&
+        !ringFingerExtended &&
+        !pinkyFingerExtended) {
+      return { name: 'grab', confidence: 0.9 };
+    }
+
+    // No recognized gesture
+    return null;
+  }
+
+  /**
+   * Significantly improved finger extension detection that works in all directions
+   * @param {Array} landmarks - Hand landmarks from MediaPipe
+   * @param {Number} fingerIndex - Index of the finger (1=index, 2=middle, 3=ring, 4=pinky)
+   * @returns {Boolean} - True if the finger is extended
+   */
+  isFingerExtendedImproved(landmarks, fingerIndex) {
+    // Index mapping for different finger joints
+    const mcpIndex = fingerIndex * 4 + 1;  // Base joint (metacarpophalangeal)
+    const pipIndex = fingerIndex * 4 + 2;  // Middle joint (proximal interphalangeal)
+    const dipIndex = fingerIndex * 4 + 3;  // End joint (distal interphalangeal)
+    const tipIndex = fingerIndex * 4 + 4;  // Finger tip
+
+    // Get the landmarks
+    const wrist = landmarks[0];
+    const mcp = landmarks[mcpIndex];
+    const pip = landmarks[pipIndex];
+    const dip = landmarks[dipIndex];
+    const tip = landmarks[tipIndex];
+
+    // METHOD 1: Distance-based approach
+    // In a curled finger, the tip is close to the base of the palm
+    // In an extended finger, the tip is far from the base
+    const tipToWristDist = this.distance3D(tip, wrist);
+    const mcpToWristDist = this.distance3D(mcp, wrist);
+
+    // Extended fingers have tips further from wrist than MCP joints
+    const distanceRatio = tipToWristDist / mcpToWristDist;
+
+    // METHOD 2: Straightness-based approach
+    // In a curled finger, there's significant bending at the joints
+    // In an extended finger, the joints form a relatively straight line
+
+    // Calculate vectors between joints
+    const wristToMcp = this.vectorBetween(wrist, mcp);
+    const mcpToPip = this.vectorBetween(mcp, pip);
+    const pipToDip = this.vectorBetween(pip, dip);
+    const dipToTip = this.vectorBetween(dip, tip);
+
+    // Normalize vectors
+    const wristToMcpNorm = this.normalizeVector(wristToMcp);
+    const mcpToPipNorm = this.normalizeVector(mcpToPip);
+    const pipToDipNorm = this.normalizeVector(pipToDip);
+    const dipToTipNorm = this.normalizeVector(dipToTip);
+
+    // Calculate angles between segments (dot product of normalized vectors)
+    // Values close to 1 mean segments are aligned (straight finger)
+    // Values close to 0 or negative mean segments are at an angle (bent finger)
+    const alignmentMcpPip = this.dotProduct(wristToMcpNorm, mcpToPipNorm);
+    const alignmentPipDip = this.dotProduct(mcpToPipNorm, pipToDipNorm);
+    const alignmentDipTip = this.dotProduct(pipToDipNorm, dipToTipNorm);
+
+    // METHOD 3: Position-based method specially for index finger
+    // In certain hand orientations, the above methods can be unreliable
+    // For index finger particularly, check if it's clearly separated from other fingers
+
+    // For index finger (fingerIndex = 1), check separation from middle finger
+    let isSeparatedFromOthers = false;
+    if (fingerIndex === 1) {
+      const middleTip = landmarks[12]; // Middle finger tip
+      const indexToMiddleDist = this.distance3D(tip, middleTip);
+      const mcpToMiddleDist = this.distance3D(mcp, middleTip);
+
+      // If index tip is far from middle tip, it's separated/extended
+      isSeparatedFromOthers = indexToMiddleDist > mcpToMiddleDist * 0.7;
+    }
+
+    // COMBINED DECISION
+    // Different thresholds for index finger vs. other fingers
+    // Index finger is considered extended more liberally
+    if (fingerIndex === 1) {
+      // For index finger: looser criteria because pointing is important
+      return (
+        (distanceRatio > 1.1) || // Distance method - extended
+        (alignmentMcpPip > 0.5 && alignmentPipDip > 0.5) || // Alignment method - somewhat straight
+        isSeparatedFromOthers // Separation method - clearly separated
+      );
+    } else {
+      // For other fingers: stricter criteria
+      return (
+        (distanceRatio > 1.2) && // Distance method - clearly extended
+        (alignmentMcpPip > 0.7 && alignmentPipDip > 0.7) // Alignment method - very straight
+      );
+    }
+  }
+
+  /**
+   * Calculate vector between two points
+   * @param {Object} a - First point with x,y,z coordinates
+   * @param {Object} b - Second point with x,y,z coordinates
+   * @returns {Object} - Vector from a to b
+   */
+  vectorBetween(a, b) {
+    return {
+      x: b.x - a.x,
+      y: b.y - a.y,
+      z: b.z - a.z
+    };
+  }
+
+  /**
+   * Normalize vector to unit length
+   * @param {Object} v - Vector with x,y,z components
+   * @returns {Object} - Normalized vector
+   */
+  normalizeVector(v) {
+    const length = Math.sqrt(v.x*v.x + v.y*v.y + v.z*v.z);
+    if (length === 0) return { x: 0, y: 0, z: 0 };
+
+    return {
+      x: v.x / length,
+      y: v.y / length,
+      z: v.z / length
+    };
+  }
+
+  /**
+   * Calculate dot product of two vectors
+   * @param {Object} a - First vector with x,y,z components
+   * @param {Object} b - Second vector with x,y,z components
+   * @returns {Number} - Dot product of vectors
+   */
+  dotProduct(a, b) {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+  }
+
+  /**
+   * Calculate 3D distance between two points
+   * @param {Object} a - First point with x,y,z coordinates
+   * @param {Object} b - Second point with x,y,z coordinates
+   * @returns {Number} - Distance between points
+   */
+  distance3D(a, b) {
+    return Math.sqrt(
+      Math.pow(a.x - b.x, 2) +
+      Math.pow(a.y - b.y, 2) +
+      Math.pow(a.z - b.z, 2)
+    );
   }
 }
 
-export default MockInputProvider;
+export default MediaPipeProvider;
