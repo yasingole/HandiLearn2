@@ -1,5 +1,8 @@
+// src/ui/HandTrackingTest.jsx
+// UPDATED VERSION WITH DIRECTION DISPLAY
+
 import React, { useEffect, useRef, useState } from 'react';
-import InputManager from '../../core/input/input-manager';
+import InputManager from '../core/input/input-manager'; // Make sure this path is correct
 import './HandTrackingTest.css';
 
 function HandTrackingTest() {
@@ -8,18 +11,49 @@ function HandTrackingTest() {
   const [inputManager, setInputManager] = useState(null);
   const [isTracking, setIsTracking] = useState(false);
   const [detectedGesture, setDetectedGesture] = useState('None');
+  const [pointingDirection, setPointingDirection] = useState(null);
   const [provider, setProvider] = useState('mediapipe');
   const [error, setError] = useState(null);
+  const [isInitializing, setIsInitializing] = useState(true);
 
   // Initialize input manager
   useEffect(() => {
-    const manager = new InputManager(provider);
-    setInputManager(manager);
+    let isMounted = true;
+    setIsInitializing(true);
+
+    const initializeManager = async () => {
+      try {
+        const manager = new InputManager(provider);
+
+        // Use the onReady callback to ensure manager is initialized
+        manager.onReady(() => {
+          if (isMounted) {
+            console.log('Input manager initialized successfully');
+            setInputManager(manager);
+            setIsInitializing(false);
+            setError(null);
+          }
+        });
+      } catch (err) {
+        if (isMounted) {
+          console.error('Error initializing input manager:', err);
+          setError(`Initialization error: ${err.message}`);
+          setIsInitializing(false);
+        }
+      }
+    };
+
+    initializeManager();
 
     // Clean up on unmount
     return () => {
-      if (manager) {
-        manager.stopTracking().catch(err => console.error('Error stopping tracking:', err));
+      isMounted = false;
+      if (inputManager && inputManager.isInitialized && isTracking) {
+        try {
+          inputManager.stopTracking();
+        } catch (err) {
+          console.error('Error stopping tracking on cleanup:', err);
+        }
       }
     };
   }, [provider]);
@@ -60,10 +94,16 @@ function HandTrackingTest() {
   // Handle starting/stopping tracking
   const toggleTracking = async () => {
     try {
+      if (!inputManager) {
+        setError("Input manager not initialized yet. Please wait...");
+        return;
+      }
+
       if (isTracking) {
         await inputManager.stopTracking();
         setIsTracking(false);
         setDetectedGesture('None');
+        setPointingDirection(null);
       } else {
         if (videoRef.current) {
           inputManager.setVideoElement(videoRef.current);
@@ -73,9 +113,16 @@ function HandTrackingTest() {
             drawResults(results);
           });
 
-          // Register gesture detection callback
+          // Register gesture detection callback with direction awareness
           inputManager.onGestureDetected((gesture, handedness) => {
-            setDetectedGesture(`${gesture.name} (${handedness})`);
+            // Check if this is a point gesture with direction
+            if (gesture.name === 'point' && gesture.direction) {
+              setDetectedGesture(`${gesture.name} (${handedness})`);
+              setPointingDirection(gesture.direction);
+            } else {
+              setDetectedGesture(`${gesture.name} (${handedness})`);
+              setPointingDirection(null);
+            }
           });
 
           await inputManager.startTracking();
@@ -94,13 +141,18 @@ function HandTrackingTest() {
   const toggleProvider = () => {
     // First stop tracking if active
     if (isTracking && inputManager) {
-      inputManager.stopTracking().catch(console.error);
+      try {
+        inputManager.stopTracking();
+      } catch (error) {
+        console.error('Error stopping tracking before provider switch:', error);
+      }
     }
 
     // Toggle provider
     setProvider(prev => prev === 'mediapipe' ? 'mock' : 'mediapipe');
     setIsTracking(false);
     setDetectedGesture('None');
+    setPointingDirection(null);
     setError(null);
   };
 
@@ -175,23 +227,40 @@ function HandTrackingTest() {
     }
   };
 
+  // CSS class for pointing direction indicators
+  const getDirectionClass = () => {
+    if (!pointingDirection) return '';
+    return `pointing-${pointingDirection}`;
+  };
+
   return (
     <div className="hand-tracking-test">
       <h2>Hand Tracking Test</h2>
 
       <div className="controls">
-        <button onClick={toggleTracking}>
+        <button onClick={toggleTracking} disabled={isInitializing}>
           {isTracking ? 'Stop Tracking' : 'Start Tracking'}
         </button>
-        <button onClick={toggleProvider}>
+        <button onClick={toggleProvider} disabled={isInitializing}>
           Using: {provider} (Click to switch)
         </button>
       </div>
 
+      {isInitializing && <div className="status">Initializing input manager...</div>}
       {error && <div className="error">{error}</div>}
 
       <div className="gesture-display">
         <p>Detected Gesture: <strong>{detectedGesture}</strong></p>
+
+        {/* Display pointing direction when applicable */}
+        {pointingDirection && (
+          <div className={`pointing-direction ${getDirectionClass()}`}>
+            <p>Pointing: <strong>{pointingDirection}</strong></p>
+            <div className="direction-indicator">
+              <div className="direction-arrow"></div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="video-container">
@@ -210,7 +279,7 @@ function HandTrackingTest() {
       <div className="instructions">
         <h3>Try these gestures:</h3>
         <ul>
-          <li><strong>Point:</strong> Extend only your index finger</li>
+          <li><strong>Point:</strong> Extend only your index finger (now with direction!)</li>
           <li><strong>Open:</strong> Spread all your fingers</li>
           <li><strong>Grab:</strong> Make a fist</li>
           <li><strong>Wave:</strong> Move your open hand side to side</li>
