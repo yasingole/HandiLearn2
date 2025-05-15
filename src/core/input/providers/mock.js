@@ -619,148 +619,148 @@ class MockProvider {
     return landmarks;
   }
 
-/**
+  /**
    * Add a pointing finger to the landmarks array based on direction
    * @param {Array} landmarks - Array of landmarks to add to
    * @param {Object} base - Base position of the finger
    * @param {String} direction - Direction to point
    */
-addPointingFinger(landmarks, base, direction) {
-  switch (direction) {
-    case 'up':
-      landmarks.push(
-        { x: base.x, y: base.y, z: 0 },
-        { x: base.x, y: base.y - 0.1, z: 0 },
-        { x: base.x, y: base.y - 0.2, z: 0 },
-        { x: base.x, y: base.y - 0.3, z: 0 }
-      );
-      break;
-    case 'down':
-      landmarks.push(
-        { x: base.x, y: base.y, z: 0 },
-        { x: base.x, y: base.y + 0.1, z: 0 },
-        { x: base.x, y: base.y + 0.2, z: 0 },
-        { x: base.x, y: base.y + 0.3, z: 0 }
-      );
-      break;
-    case 'left':
-      landmarks.push(
-        { x: base.x, y: base.y, z: 0 },
-        { x: base.x - 0.1, y: base.y, z: 0 },
-        { x: base.x - 0.2, y: base.y, z: 0 },
-        { x: base.x - 0.3, y: base.y, z: 0 }
-      );
-      break;
-    case 'right':
-      landmarks.push(
-        { x: base.x, y: base.y, z: 0 },
-        { x: base.x + 0.1, y: base.y, z: 0 },
-        { x: base.x + 0.2, y: base.y, z: 0 },
-        { x: base.x + 0.3, y: base.y, z: 0 }
-      );
-      break;
-    case 'forward':
-      landmarks.push(
-        { x: base.x, y: base.y, z: 0 },
-        { x: base.x, y: base.y - 0.1, z: -0.1 },
-        { x: base.x, y: base.y - 0.15, z: -0.2 },
-        { x: base.x, y: base.y - 0.2, z: -0.3 }
-      );
-      break;
-    case 'backward':
-      landmarks.push(
-        { x: base.x, y: base.y, z: 0 },
-        { x: base.x, y: base.y - 0.1, z: 0.1 },
-        { x: base.x, y: base.y - 0.15, z: 0.2 },
-        { x: base.x, y: base.y - 0.2, z: 0.3 }
-      );
-      break;
-    case 'top-left':
-      landmarks.push(
-        { x: base.x, y: base.y, z: 0 },
-        { x: base.x - 0.1, y: base.y - 0.1, z: 0 },
-        { x: base.x - 0.2, y: base.y - 0.2, z: 0 },
-        { x: base.x - 0.3, y: base.y - 0.3, z: 0 }
-      );
-      break;
-    case 'top-right':
-      landmarks.push(
-        { x: base.x, y: base.y, z: 0 },
-        { x: base.x + 0.1, y: base.y - 0.1, z: 0 },
-        { x: base.x + 0.2, y: base.y - 0.2, z: 0 },
-        { x: base.x + 0.3, y: base.y - 0.3, z: 0 }
-      );
-      break;
-    case 'bottom-left':
-      landmarks.push(
-        { x: base.x, y: base.y, z: 0 },
-        { x: base.x - 0.1, y: base.y + 0.1, z: 0 },
-        { x: base.x - 0.2, y: base.y + 0.2, z: 0 },
-        { x: base.x - 0.3, y: base.y + 0.3, z: 0 }
-      );
-      break;
-    case 'bottom-right':
-      landmarks.push(
-        { x: base.x, y: base.y, z: 0 },
-        { x: base.x + 0.1, y: base.y + 0.1, z: 0 },
-        { x: base.x + 0.2, y: base.y + 0.2, z: 0 },
-        { x: base.x + 0.3, y: base.y + 0.3, z: 0 }
-      );
-      break;
-    default:
-      // Default to pointing up
-      landmarks.push(
-        { x: base.x, y: base.y, z: 0 },
-        { x: base.x, y: base.y - 0.1, z: 0 },
-        { x: base.x, y: base.y - 0.2, z: 0 },
-        { x: base.x, y: base.y - 0.3, z: 0 }
-      );
-      break;
+  addPointingFinger(landmarks, base, direction) {
+    switch (direction) {
+      case 'up':
+        landmarks.push(
+          { x: base.x, y: base.y, z: 0 },
+          { x: base.x, y: base.y - 0.1, z: 0 },
+          { x: base.x, y: base.y - 0.2, z: 0 },
+          { x: base.x, y: base.y - 0.3, z: 0 }
+        );
+        break;
+      case 'down':
+        landmarks.push(
+          { x: base.x, y: base.y, z: 0 },
+          { x: base.x, y: base.y + 0.1, z: 0 },
+          { x: base.x, y: base.y + 0.2, z: 0 },
+          { x: base.x, y: base.y + 0.3, z: 0 }
+        );
+        break;
+      case 'left':
+        landmarks.push(
+          { x: base.x, y: base.y, z: 0 },
+          { x: base.x - 0.1, y: base.y, z: 0 },
+          { x: base.x - 0.2, y: base.y, z: 0 },
+          { x: base.x - 0.3, y: base.y, z: 0 }
+        );
+        break;
+      case 'right':
+        landmarks.push(
+          { x: base.x, y: base.y, z: 0 },
+          { x: base.x + 0.1, y: base.y, z: 0 },
+          { x: base.x + 0.2, y: base.y, z: 0 },
+          { x: base.x + 0.3, y: base.y, z: 0 }
+        );
+        break;
+      case 'forward':
+        landmarks.push(
+          { x: base.x, y: base.y, z: 0 },
+          { x: base.x, y: base.y - 0.1, z: -0.1 },
+          { x: base.x, y: base.y - 0.15, z: -0.2 },
+          { x: base.x, y: base.y - 0.2, z: -0.3 }
+        );
+        break;
+      case 'backward':
+        landmarks.push(
+          { x: base.x, y: base.y, z: 0 },
+          { x: base.x, y: base.y - 0.1, z: 0.1 },
+          { x: base.x, y: base.y - 0.15, z: 0.2 },
+          { x: base.x, y: base.y - 0.2, z: 0.3 }
+        );
+        break;
+      case 'top-left':
+        landmarks.push(
+          { x: base.x, y: base.y, z: 0 },
+          { x: base.x - 0.1, y: base.y - 0.1, z: 0 },
+          { x: base.x - 0.2, y: base.y - 0.2, z: 0 },
+          { x: base.x - 0.3, y: base.y - 0.3, z: 0 }
+        );
+        break;
+      case 'top-right':
+        landmarks.push(
+          { x: base.x, y: base.y, z: 0 },
+          { x: base.x + 0.1, y: base.y - 0.1, z: 0 },
+          { x: base.x + 0.2, y: base.y - 0.2, z: 0 },
+          { x: base.x + 0.3, y: base.y - 0.3, z: 0 }
+        );
+        break;
+      case 'bottom-left':
+        landmarks.push(
+          { x: base.x, y: base.y, z: 0 },
+          { x: base.x - 0.1, y: base.y + 0.1, z: 0 },
+          { x: base.x - 0.2, y: base.y + 0.2, z: 0 },
+          { x: base.x - 0.3, y: base.y + 0.3, z: 0 }
+        );
+        break;
+      case 'bottom-right':
+        landmarks.push(
+          { x: base.x, y: base.y, z: 0 },
+          { x: base.x + 0.1, y: base.y + 0.1, z: 0 },
+          { x: base.x + 0.2, y: base.y + 0.2, z: 0 },
+          { x: base.x + 0.3, y: base.y + 0.3, z: 0 }
+        );
+        break;
+      default:
+        // Default to pointing up
+        landmarks.push(
+          { x: base.x, y: base.y, z: 0 },
+          { x: base.x, y: base.y - 0.1, z: 0 },
+          { x: base.x, y: base.y - 0.2, z: 0 },
+          { x: base.x, y: base.y - 0.3, z: 0 }
+        );
+        break;
+    }
   }
-}
 
-/**
- * Get simulated gesture based on current state
- * @param {Array} landmarks - Hand landmarks
- * @returns {Object|null} - Simulated gesture or null
- */
-getSimulatedGesture(landmarks) {
-  switch (this.currentGesture) {
-    case 'point':
-      return {
-        name: 'point',
-        direction: this.currentDirection || 'up',
-        confidence: 0.9,
-        vector: {
-          dx: this.currentDirection === 'right' ? 0.3 : (this.currentDirection === 'left' ? -0.3 : 0),
-          dy: this.currentDirection === 'down' ? 0.3 : (this.currentDirection === 'up' ? -0.3 : 0),
-          dz: this.currentDirection === 'backward' ? 0.3 : (this.currentDirection === 'forward' ? -0.3 : 0)
-        }
-      };
-    case 'open':
-      return { name: 'open', confidence: 0.9 };
-    case 'grab':
-      return { name: 'grab', confidence: 0.9 };
-    case 'pinch':
-      return {
-        name: 'pinch',
-        strength: 0.9,
-        duration: 500, // Simulated duration
-        confidence: 0.9
-      };
-    case 'wave':
-      return { name: 'wave', confidence: 0.9 };
-    case 'swipe':
-      return {
-        name: 'swipe',
-        direction: this.currentDirection || 'right',
-        speed: 0.8,
-        confidence: 0.9
-      };
-    default:
-      return null;
+  /**
+   * Get simulated gesture based on current state
+   * @param {Array} landmarks - Hand landmarks
+   * @returns {Object|null} - Simulated gesture or null
+   */
+  getSimulatedGesture(landmarks) {
+    switch (this.currentGesture) {
+      case 'point':
+        return {
+          name: 'point',
+          direction: this.currentDirection || 'up',
+          confidence: 0.9,
+          vector: {
+            dx: this.currentDirection === 'right' ? 0.3 : (this.currentDirection === 'left' ? -0.3 : 0),
+            dy: this.currentDirection === 'down' ? 0.3 : (this.currentDirection === 'up' ? -0.3 : 0),
+            dz: this.currentDirection === 'backward' ? 0.3 : (this.currentDirection === 'forward' ? -0.3 : 0)
+          }
+        };
+      case 'open':
+        return { name: 'open', confidence: 0.9 };
+      case 'grab':
+        return { name: 'grab', confidence: 0.9 };
+      case 'pinch':
+        return {
+          name: 'pinch',
+          strength: 0.9,
+          duration: 500, // Simulated duration
+          confidence: 0.9
+        };
+      case 'wave':
+        return { name: 'wave', confidence: 0.9 };
+      case 'swipe':
+        return {
+          name: 'swipe',
+          direction: this.currentDirection || 'right',
+          speed: 0.8,
+          confidence: 0.9
+        };
+      default:
+        return null;
+    }
   }
-}
 }
 
 export default MockProvider;
