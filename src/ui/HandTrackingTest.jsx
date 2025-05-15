@@ -1,8 +1,8 @@
 // src/ui/HandTrackingTest.jsx
-// UPDATED FOR FORWARD POINTING TESTING
+// UPDATED FOR NEW GESTURES AND DIAGONAL DIRECTIONS
 
 import React, { useEffect, useRef, useState } from 'react';
-import InputManager from '../core/input/input-manager'; // Fixed import path
+import InputManager from '../core/input/input-manager';
 import './HandTrackingTest.css';
 
 function HandTrackingTest() {
@@ -14,7 +14,15 @@ function HandTrackingTest() {
   const [provider, setProvider] = useState('mediapipe');
   const [error, setError] = useState(null);
   const [isInitializing, setIsInitializing] = useState(true);
-  const [pointingInfo, setPointingInfo] = useState(null); // Store detailed pointing info
+
+  // Store detailed gesture info
+  const [gestureDetails, setGestureDetails] = useState({
+    direction: null,
+    strength: null,
+    speed: null,
+    duration: null,
+    vector: null
+  });
 
   // Initialize input manager
   useEffect(() => {
@@ -103,7 +111,13 @@ function HandTrackingTest() {
         await inputManager.stopTracking();
         setIsTracking(false);
         setDetectedGesture('None');
-        setPointingInfo(null);
+        setGestureDetails({
+          direction: null,
+          strength: null,
+          speed: null,
+          duration: null,
+          vector: null
+        });
       } else {
         if (videoRef.current) {
           inputManager.setVideoElement(videoRef.current);
@@ -113,37 +127,57 @@ function HandTrackingTest() {
             drawResults(results);
           });
 
-          // Register gesture detection callback with enhanced display
+          // Register gesture detection callback with enhanced details
           inputManager.onGestureDetected((gesture, handedness, landmarks) => {
             // Format the detected gesture with additional details
             let displayText = `${gesture.name} (${handedness})`;
 
+            // Prepare gesture details object
+            const details = {
+              direction: null,
+              strength: null,
+              speed: null,
+              duration: null,
+              vector: null
+            };
+
             // Add direction for pointing gesture
             if (gesture.name === 'point' && gesture.direction) {
               displayText = `${gesture.name} ${gesture.direction} (${handedness})`;
+              details.direction = gesture.direction;
 
-              // Store extra pointing debug info
-              if (landmarks && landmarks.length > 0) {
-                const wrist = landmarks[0];
-                const indexTip = landmarks[8];
-                if (wrist && indexTip) {
-                  const dx = indexTip.x - wrist.x;
-                  const dy = indexTip.y - wrist.y;
-                  const dz = indexTip.z - wrist.z;
-
-                  setPointingInfo({
-                    dx: dx.toFixed(3),
-                    dy: dy.toFixed(3),
-                    dz: dz.toFixed(3),
-                    direction: gesture.direction
-                  });
-                }
+              if (gesture.vector) {
+                details.vector = gesture.vector;
               }
-            } else {
-              setPointingInfo(null);
+            }
+
+            // Add details for pinch gesture
+            if (gesture.name === 'pinch') {
+              if (gesture.strength) {
+                details.strength = gesture.strength;
+                displayText += ` (strength: ${gesture.strength.toFixed(2)})`;
+              }
+
+              if (gesture.duration) {
+                details.duration = gesture.duration;
+              }
+            }
+
+            // Add details for swipe gesture
+            if (gesture.name === 'swipe') {
+              if (gesture.direction) {
+                displayText = `${gesture.name} ${gesture.direction} (${handedness})`;
+                details.direction = gesture.direction;
+              }
+
+              if (gesture.speed) {
+                details.speed = gesture.speed;
+                displayText += ` (speed: ${gesture.speed.toFixed(2)})`;
+              }
             }
 
             setDetectedGesture(displayText);
+            setGestureDetails(details);
           });
 
           await inputManager.startTracking();
@@ -173,7 +207,13 @@ function HandTrackingTest() {
     setProvider(prev => prev === 'mediapipe' ? 'mock' : 'mediapipe');
     setIsTracking(false);
     setDetectedGesture('None');
-    setPointingInfo(null);
+    setGestureDetails({
+      direction: null,
+      strength: null,
+      speed: null,
+      duration: null,
+      vector: null
+    });
     setError(null);
   };
 
@@ -248,15 +288,110 @@ function HandTrackingTest() {
     }
   };
 
+  // Render gesture details as a debug panel
+  const renderGestureDetails = () => {
+    const hasDetails = Object.values(gestureDetails).some(val => val !== null);
+
+    if (!hasDetails) return null;
+
+    return (
+      <div className="gesture-details">
+        <h3>Gesture Details</h3>
+        <div className="details-grid">
+          {gestureDetails.direction && (
+            <div className="detail-item">
+              <span className="detail-label">Direction:</span>
+              <span className="detail-value">{gestureDetails.direction}</span>
+            </div>
+          )}
+
+          {gestureDetails.strength && (
+            <div className="detail-item">
+              <span className="detail-label">Strength:</span>
+              <span className="detail-value">{gestureDetails.strength.toFixed(2)}</span>
+            </div>
+          )}
+
+          {gestureDetails.speed && (
+            <div className="detail-item">
+              <span className="detail-label">Speed:</span>
+              <span className="detail-value">{gestureDetails.speed.toFixed(2)}</span>
+            </div>
+          )}
+
+          {gestureDetails.duration && (
+            <div className="detail-item">
+              <span className="detail-label">Duration:</span>
+              <span className="detail-value">{gestureDetails.duration}ms</span>
+            </div>
+          )}
+
+          {gestureDetails.vector && (
+            <div className="detail-item vector-details">
+              <span className="detail-label">Vector:</span>
+              <div className="vector-values">
+                <div>X: {gestureDetails.vector.dx.toFixed(3)}</div>
+                <div>Y: {gestureDetails.vector.dy.toFixed(3)}</div>
+                <div>Z: {gestureDetails.vector.dz.toFixed(3)}</div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // Render a direction diagram for pointing gestures
+  const renderDirectionDiagram = () => {
+    if (!detectedGesture.includes('point')) return null;
+
+    // Determine which direction is active
+    const direction = gestureDetails.direction || 'none';
+
+    // Define a class generator for diagram cells
+    const cellClass = (cellDirection) => {
+      return `direction-cell ${direction === cellDirection ? 'active' : ''}`;
+    };
+
+    return (
+      <div className="direction-diagram">
+        <h3>Pointing Direction</h3>
+        <div className="direction-grid">
+          <div className={cellClass('top-left')}>↖</div>
+          <div className={cellClass('up')}>↑</div>
+          <div className={cellClass('top-right')}>↗</div>
+          <div className={cellClass('left')}>←</div>
+          <div className={`direction-cell ${direction === 'forward' ? 'active' : ''}`}>⊙</div>
+          <div className={cellClass('right')}>→</div>
+          <div className={cellClass('bottom-left')}>↙</div>
+          <div className={cellClass('down')}>↓</div>
+          <div className={cellClass('bottom-right')}>↘</div>
+        </div>
+        <div className="depth-indicators">
+          <div className={`depth-indicator ${direction === 'forward' ? 'active' : ''}`}>Forward</div>
+          <div className={`depth-indicator ${direction === 'backward' ? 'active' : ''}`}>Backward</div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="hand-tracking-test">
       <h2>Hand Tracking Test</h2>
 
       <div className="controls">
-        <button onClick={toggleTracking} disabled={isInitializing}>
+        <button
+          onClick={toggleTracking}
+          disabled={isInitializing}
+          className={isTracking ? "stop-button" : "start-button"}
+        >
           {isTracking ? 'Stop Tracking' : 'Start Tracking'}
         </button>
-        <button onClick={toggleProvider} disabled={isInitializing}>
+        <button
+          onClick={toggleProvider}
+          disabled={isInitializing}
+          className="provider-button"
+        >
           Using: {provider} (Click to switch)
         </button>
       </div>
@@ -266,19 +401,11 @@ function HandTrackingTest() {
 
       <div className="gesture-display">
         <p>Detected Gesture: <strong>{detectedGesture}</strong></p>
+      </div>
 
-        {/* Display pointing debug info */}
-        {pointingInfo && (
-          <div className="pointing-debug">
-            <p>Pointing Debug:</p>
-            <ul>
-              <li>X difference: {pointingInfo.dx}</li>
-              <li>Y difference: {pointingInfo.dy}</li>
-              <li>Z difference: {pointingInfo.dz}</li>
-              <li>Direction: {pointingInfo.direction}</li>
-            </ul>
-          </div>
-        )}
+      <div className="debug-panel">
+        {renderGestureDetails()}
+        {renderDirectionDiagram()}
       </div>
 
       <div className="video-container">
@@ -297,11 +424,12 @@ function HandTrackingTest() {
       <div className="instructions">
         <h3>Try these gestures:</h3>
         <ul>
-          <li><strong>Point:</strong> Extend only your index finger. Now shows direction (up, down, left, right, forward, backward)!</li>
-          <li><strong>Forward point:</strong> Point directly at the camera with your index finger</li>
+          <li><strong>Point:</strong> Extend only your index finger. Shows all directions (up, down, left, right, forward, backward, and diagonals)!</li>
           <li><strong>Open:</strong> Spread all your fingers</li>
           <li><strong>Grab:</strong> Make a fist</li>
+          <li><strong>Pinch:</strong> Touch your thumb and index finger together</li>
           <li><strong>Wave:</strong> Move your open hand side to side</li>
+          <li><strong>Swipe:</strong> Quick hand movement in any direction</li>
         </ul>
       </div>
     </div>

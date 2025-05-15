@@ -30,9 +30,17 @@ class MediaPipeProvider {
     // For pinch detection
     this.lastPinchDistance = {};
     this.isPinching = {};
+    this.pinchStartTime = {};
+
+    // For swipe detection
+    this.swipePositions = {};
+    this.swipeStartTime = {};
+    this.swipeLastPosition = {};
+    this.swipeVelocity = {};
+    this.lastSwipeTime = {};
 
     // Debug mode - set to true to enable console logging
-    this.debugMode = true;
+    this.debugMode = false;
   }
 
   /**
@@ -130,6 +138,12 @@ class MediaPipeProvider {
         this.waveLastDirection = {};
         this.lastPinchDistance = {};
         this.isPinching = {};
+        this.pinchStartTime = {};
+        this.swipePositions = {};
+        this.swipeStartTime = {};
+        this.swipeLastPosition = {};
+        this.swipeVelocity = {};
+        this.lastSwipeTime = {};
 
         console.log('MediaPipe hand tracking started');
         return true;
@@ -170,6 +184,12 @@ class MediaPipeProvider {
       this.waveLastDirection = {};
       this.lastPinchDistance = {};
       this.isPinching = {};
+      this.pinchStartTime = {};
+      this.swipePositions = {};
+      this.swipeStartTime = {};
+      this.swipeLastPosition = {};
+      this.swipeVelocity = {};
+      this.lastSwipeTime = {};
 
       console.log('MediaPipe hand tracking stopped');
       return true;
@@ -228,6 +248,9 @@ class MediaPipeProvider {
 
         // Detect wave gesture (temporal pattern)
         this.detectWaveGesture(landmarks[0], handId, handedness);
+
+        // Detect swipe gesture (temporal pattern)
+        this.detectSwipeGesture(landmarks[0], handId, handedness);
 
         // Report static gesture if detected and different from last time
         if (staticGesture &&
@@ -335,6 +358,108 @@ class MediaPipeProvider {
   }
 
   /**
+   * Detect swipe gestures in different directions
+   * @param {Object} wrist - Wrist landmark
+   * @param {String} handId - Unique hand identifier
+   * @param {String} handedness - 'Left' or 'Right'
+   */
+  detectSwipeGesture(wrist, handId, handedness) {
+    const now = Date.now();
+
+    // Initialize swipe detection state for this hand if needed
+    if (!this.swipePositions[handId]) {
+      this.swipePositions[handId] = [];
+      this.swipeStartTime[handId] = now;
+      this.swipeLastPosition[handId] = { x: wrist.x, y: wrist.y, time: now };
+      this.swipeVelocity[handId] = { x: 0, y: 0 };
+      this.lastSwipeTime[handId] = 0;
+    }
+
+    // Check if enough time has passed since last swipe detection
+    // to prevent multiple swipe detections for the same gesture
+    if (now - this.lastSwipeTime[handId] < 1000) {
+      return;
+    }
+
+    // Add current position to history
+    this.swipePositions[handId].push({
+      x: wrist.x,
+      y: wrist.y,
+      time: now
+    });
+
+    // Keep only recent positions (last 0.5 seconds)
+    while (this.swipePositions[handId].length > 0 &&
+           now - this.swipePositions[handId][0].time > 500) {
+      this.swipePositions[handId].shift();
+    }
+
+    // Need at least 5 positions to detect a smooth swipe
+    if (this.swipePositions[handId].length < 5) return;
+
+    // Get the first and last positions for overall movement
+    const positions = this.swipePositions[handId];
+    const first = positions[0];
+    const last = positions[positions.length - 1];
+
+    // Calculate time difference
+    const timeDiff = (last.time - first.time) / 1000; // in seconds
+
+    // Calculate total displacement
+    const deltaX = last.x - first.x;
+    const deltaY = last.y - first.y;
+
+    // Calculate velocity (units per second)
+    const velocityX = deltaX / timeDiff;
+    const velocityY = deltaY / timeDiff;
+
+    // Only detect swipes with significant movement and velocity
+    const SWIPE_THRESHOLD = 0.15; // Minimum displacement
+    const VELOCITY_THRESHOLD = 0.5; // Minimum velocity
+
+    // Calculate absolute values for comparisons
+    const absDeltaX = Math.abs(deltaX);
+    const absDeltaY = Math.abs(deltaY);
+    const absVelocityX = Math.abs(velocityX);
+    const absVelocityY = Math.abs(velocityY);
+
+    // Check if the movement is significant enough to be a swipe
+    if ((absDeltaX > SWIPE_THRESHOLD || absDeltaY > SWIPE_THRESHOLD) &&
+        (absVelocityX > VELOCITY_THRESHOLD || absVelocityY > VELOCITY_THRESHOLD)) {
+
+      // Determine swipe direction
+      let swipeDirection = '';
+
+      // Check if movement is more horizontal or vertical
+      if (absDeltaX > absDeltaY) {
+        // Horizontal swipe
+        swipeDirection = deltaX > 0 ? 'right' : 'left';
+      } else {
+        // Vertical swipe
+        swipeDirection = deltaY > 0 ? 'down' : 'up';
+      }
+
+      // Create swipe gesture with direction and speed info
+      const swipeGesture = {
+        name: 'swipe',
+        direction: swipeDirection,
+        speed: Math.sqrt(velocityX*velocityX + velocityY*velocityY),
+        confidence: 0.9
+      };
+
+      // Notify about swipe gesture
+      this.notifyGesture(swipeGesture, handedness, null);
+
+      // Update last swipe time to prevent rapid consecutive detections
+      this.lastSwipeTime[handId] = now;
+
+      // Reset swipe tracking for new detection
+      this.swipePositions[handId] = [];
+      this.swipeStartTime[handId] = now;
+    }
+  }
+
+  /**
    * Detect static gestures (point, open, grab, pinch) with direction information
    * @param {Array} landmarks - Hand landmarks from MediaPipe
    * @param {String} handedness - 'Left' or 'Right'
@@ -360,6 +485,7 @@ class MediaPipeProvider {
     if (this.lastPinchDistance[handId] === undefined) {
       this.lastPinchDistance[handId] = thumbIndexDistance;
       this.isPinching[handId] = false;
+      this.pinchStartTime[handId] = 0;
     }
 
     // Pinch thresholds
@@ -374,6 +500,7 @@ class MediaPipeProvider {
     if (!wasPinching && thumbIndexDistance < PINCH_DISTANCE_THRESHOLD) {
       // Start pinching
       this.isPinching[handId] = true;
+      this.pinchStartTime[handId] = Date.now();
     } else if (wasPinching && thumbIndexDistance > PINCH_DISTANCE_THRESHOLD + PINCH_STATE_CHANGE_THRESHOLD) {
       // Stop pinching when fingers move significantly apart
       this.isPinching[handId] = false;
@@ -384,9 +511,12 @@ class MediaPipeProvider {
 
     // If pinching, return pinch gesture
     if (this.isPinching[handId]) {
+      const pinchDuration = Date.now() - this.pinchStartTime[handId];
+
       return {
         name: 'pinch',
         strength: Math.max(0, 1 - thumbIndexDistance / PINCH_DISTANCE_THRESHOLD),
+        duration: pinchDuration,
         confidence: 0.9
       };
     }

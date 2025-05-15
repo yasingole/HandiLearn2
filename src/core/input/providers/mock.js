@@ -1,16 +1,12 @@
-// src/core/input/providers/mediapipe.js
+// src/core/input/providers/mock.js
 // ENHANCED VERSION WITH DIAGONAL DIRECTIONS AND PINCH GESTURE
 
 /**
- * MediaPipe Provider
- * Uses MediaPipe Hands API to track hand landmarks and detect gestures
+ * Mock Provider
+ * Simulates MediaPipe hand tracking for testing without a camera
  */
-import { Hands } from '@mediapipe/hands';
-
-class MediaPipeProvider {
+class MockProvider {
   constructor() {
-    this.hands = null;
-    this.videoElement = null;
     this.isInitialized = false;
     this.isTracking = false;
     this.handUpdateCallbacks = [];
@@ -30,49 +26,49 @@ class MediaPipeProvider {
     // For pinch detection
     this.lastPinchDistance = {};
     this.isPinching = {};
+    this.pinchStartTime = {};
+
+    // For swipe detection
+    this.swipePositions = {};
+    this.swipeStartTime = {};
+    this.swipeLastPosition = {};
+    this.swipeVelocity = {};
+    this.lastSwipeTime = {};
+
+    // Animation frame request
+    this.animationFrameId = null;
+
+    // Current simulated gesture
+    this.currentGesture = 'point';
+    this.currentDirection = 'up';
+    this.gestureCycleInterval = null;
+    this.gestureChangeTime = Date.now();
 
     // Debug mode - set to true to enable console logging
-    this.debugMode = true;
+    this.debugMode = false;
   }
 
   /**
-   * Initialize the MediaPipe Hands API
+   * Initialize the mock provider
    * @returns {Promise} - Resolves when initialized
    */
   async initialize() {
     try {
-      this.hands = new Hands({
-        locateFile: (file) => {
-          return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-        }
-      });
-
-      // Configure MediaPipe Hands
-      await this.hands.setOptions({
-        maxNumHands: 2,
-        modelComplexity: 1, // 0: Light, 1: Full
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5
-      });
-
-      // Set up result handler
-      this.hands.onResults(results => this.handleResults(results));
-
       this.isInitialized = true;
-      console.log('MediaPipe Hands initialized successfully');
+      console.log('Mock hand tracking provider initialized successfully');
       return true;
     } catch (error) {
-      console.error('Failed to initialize MediaPipe Hands:', error);
+      console.error('Failed to initialize mock provider:', error);
       throw error;
     }
   }
 
   /**
-   * Set video element to use for tracking
+   * Set video element (not used in mock provider but kept for API compatibility)
    * @param {HTMLVideoElement} videoElement - The video element
    */
   setVideoElement(videoElement) {
-    this.videoElement = videoElement;
+    // Not used in mock provider, but kept for API compatibility
   }
 
   /**
@@ -81,7 +77,7 @@ class MediaPipeProvider {
    */
   async startTracking() {
     if (!this.isInitialized) {
-      throw new Error('MediaPipe provider not initialized');
+      throw new Error('Mock provider not initialized');
     }
 
     if (this.isTracking) {
@@ -89,55 +85,35 @@ class MediaPipeProvider {
     }
 
     try {
-      if (!this.videoElement) {
-        throw new Error('Video element not set. Call setVideoElement() first.');
-      }
+      this.isTracking = true;
 
-      // Start the camera feed
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user' }
-        });
+      // Reset gesture detection state
+      this.lastGesture = {};
+      this.lastGestureTime = {};
+      this.gestureConfidence = {};
+      this.wavePositions = {};
+      this.waveDirectionChanges = {};
+      this.waveStartTime = {};
+      this.waveLastDirection = {};
+      this.lastPinchDistance = {};
+      this.isPinching = {};
+      this.pinchStartTime = {};
+      this.swipePositions = {};
+      this.swipeStartTime = {};
+      this.swipeLastPosition = {};
+      this.swipeVelocity = {};
+      this.lastSwipeTime = {};
 
-        this.videoElement.srcObject = stream;
-        this.videoElement.play();
+      // Start animation loop to simulate hand movements
+      this.startAnimationLoop();
 
-        // Wait for video to be ready
-        await new Promise(resolve => {
-          this.videoElement.onloadedmetadata = () => resolve();
-          // If video is already loaded, resolve immediately
-          if (this.videoElement.readyState >= 2) resolve();
-        });
+      // Set up gesture cycling
+      this.startGestureCycling();
 
-        // Create a function to process each frame
-        const processFrame = async () => {
-          if (!this.isTracking) return;
-
-          await this.hands.send({ image: this.videoElement });
-          requestAnimationFrame(processFrame);
-        };
-
-        this.isTracking = true;
-        processFrame();
-
-        // Reset gesture detection state
-        this.lastGesture = {};
-        this.lastGestureTime = {};
-        this.gestureConfidence = {};
-        this.wavePositions = {};
-        this.waveDirectionChanges = {};
-        this.waveStartTime = {};
-        this.waveLastDirection = {};
-        this.lastPinchDistance = {};
-        this.isPinching = {};
-
-        console.log('MediaPipe hand tracking started');
-        return true;
-      } else {
-        throw new Error('getUserMedia not supported in this browser');
-      }
+      console.log('Mock hand tracking started');
+      return true;
     } catch (error) {
-      console.error('Failed to start hand tracking:', error);
+      console.error('Failed to start mock hand tracking:', error);
       this.isTracking = false;
       throw error;
     }
@@ -153,11 +129,16 @@ class MediaPipeProvider {
     try {
       this.isTracking = false;
 
-      // Stop all video tracks
-      if (this.videoElement && this.videoElement.srcObject) {
-        const tracks = this.videoElement.srcObject.getTracks();
-        tracks.forEach(track => track.stop());
-        this.videoElement.srcObject = null;
+      // Stop animation loop
+      if (this.animationFrameId) {
+        cancelAnimationFrame(this.animationFrameId);
+        this.animationFrameId = null;
+      }
+
+      // Stop gesture cycling
+      if (this.gestureCycleInterval) {
+        clearInterval(this.gestureCycleInterval);
+        this.gestureCycleInterval = null;
       }
 
       // Reset gesture detection state
@@ -170,11 +151,17 @@ class MediaPipeProvider {
       this.waveLastDirection = {};
       this.lastPinchDistance = {};
       this.isPinching = {};
+      this.pinchStartTime = {};
+      this.swipePositions = {};
+      this.swipeStartTime = {};
+      this.swipeLastPosition = {};
+      this.swipeVelocity = {};
+      this.lastSwipeTime = {};
 
-      console.log('MediaPipe hand tracking stopped');
+      console.log('Mock hand tracking stopped');
       return true;
     } catch (error) {
-      console.error('Error stopping hand tracking:', error);
+      console.error('Error stopping mock hand tracking:', error);
       throw error;
     }
   }
@@ -204,423 +191,576 @@ class MediaPipeProvider {
   }
 
   /**
-   * Handle results from MediaPipe Hands
-   * @param {Object} results - Results from MediaPipe Hands
+   * Start animation loop to simulate hand movements
    */
-  handleResults(results) {
-    if (!results || !results.multiHandLandmarks) return;
+  startAnimationLoop() {
+    const animateFrame = () => {
+      if (!this.isTracking) return;
 
-    const { multiHandLandmarks, multiHandedness } = results;
+      // Generate simulated hand landmarks
+      const landmarks = this.generateHandLandmarks();
 
-    // Notify all hand update callbacks
-    if (this.handUpdateCallbacks.length > 0) {
-      this.handUpdateCallbacks.forEach(callback => callback(results));
-    }
-
-    // Process gestures
-    if (this.gestureCallbacks.length > 0 && multiHandLandmarks.length > 0) {
-      multiHandLandmarks.forEach((landmarks, handIndex) => {
-        const handedness = multiHandedness[handIndex].label; // 'Left' or 'Right'
-        const handId = `${handedness}_${handIndex}`;
-
-        // First detect static gestures (point, open, grab, pinch)
-        const staticGesture = this.detectStaticGesture(landmarks, handedness, handId);
-
-        // Detect wave gesture (temporal pattern)
-        this.detectWaveGesture(landmarks[0], handId, handedness);
-
-        // Report static gesture if detected and different from last time
-        if (staticGesture &&
-            (this.lastGesture[handId] !== staticGesture.name ||
-             Date.now() - this.lastGestureTime[handId] > 500)) {
-
-          this.notifyGesture(staticGesture, handedness, landmarks);
-          this.lastGesture[handId] = staticGesture.name;
-          this.lastGestureTime[handId] = Date.now();
-        }
-      });
-    }
-  }
-
-  /**
-   * Notify gesture callbacks about a detected gesture
-   * @param {Object} gesture - The detected gesture
-   * @param {String} handedness - 'Left' or 'Right'
-   * @param {Array} landmarks - Hand landmarks
-   */
-  notifyGesture(gesture, handedness, landmarks) {
-    if (this.gestureCallbacks.length > 0) {
-      this.gestureCallbacks.forEach(callback => {
-        callback(gesture, handedness, landmarks);
-      });
-    }
-  }
-
-  /**
-   * Detect back-and-forth wave gesture
-   * @param {Object} wrist - Wrist landmark
-   * @param {String} handId - Unique hand identifier
-   * @param {String} handedness - 'Left' or 'Right'
-   */
-  detectWaveGesture(wrist, handId, handedness) {
-    const now = Date.now();
-
-    // Initialize wave detection state for this hand if needed
-    if (!this.wavePositions[handId]) {
-      this.wavePositions[handId] = [];
-      this.waveDirectionChanges[handId] = 0;
-      this.waveStartTime[handId] = now;
-      this.waveLastDirection[handId] = null;
-    }
-
-    // Add current position to history
-    this.wavePositions[handId].push({
-      x: wrist.x,
-      y: wrist.y,
-      time: now
-    });
-
-    // Keep only recent positions (last 2 seconds)
-    while (this.wavePositions[handId].length > 0 &&
-           now - this.wavePositions[handId][0].time > 2000) {
-      this.wavePositions[handId].shift();
-    }
-
-    // Need at least 3 positions to detect direction changes
-    if (this.wavePositions[handId].length < 3) return;
-
-    // Check if we should reset wave detection (it's been too long)
-    if (now - this.waveStartTime[handId] > 3000) {
-      this.waveDirectionChanges[handId] = 0;
-      this.waveStartTime[handId] = now;
-      this.waveLastDirection[handId] = null;
-    }
-
-    // Get the most recent positions
-    const positions = this.wavePositions[handId];
-    const current = positions[positions.length - 1];
-    const previous = positions[positions.length - 3]; // Skip one position to reduce noise
-
-    // Calculate horizontal movement
-    const deltaX = current.x - previous.x;
-
-    // Skip if movement is too small
-    if (Math.abs(deltaX) < 0.03) return;
-
-    // Determine direction (simplify to left/right)
-    const direction = deltaX > 0 ? 'right' : 'left';
-
-    // Check for direction change
-    if (this.waveLastDirection[handId] !== null &&
-        this.waveLastDirection[handId] !== direction) {
-
-      // Increment direction change counter
-      this.waveDirectionChanges[handId]++;
-
-      // If we've detected enough direction changes in the time window, it's a wave
-      if (this.waveDirectionChanges[handId] >= 2 &&
-          now - this.waveStartTime[handId] < 2000) {
-
-        // Notify about wave gesture
-        this.notifyGesture({ name: 'wave', confidence: 0.9 }, handedness, null);
-
-        // Reset wave detection after successful detection
-        this.waveDirectionChanges[handId] = 0;
-        this.waveStartTime[handId] = now + 1000; // Add cooldown
-      }
-    }
-
-    // Update last direction
-    this.waveLastDirection[handId] = direction;
-  }
-
-  /**
-   * Detect static gestures (point, open, grab, pinch) with direction information
-   * @param {Array} landmarks - Hand landmarks from MediaPipe
-   * @param {String} handedness - 'Left' or 'Right'
-   * @param {String} handId - Unique identifier for this hand
-   * @returns {Object|null} - Detected gesture or null
-   */
-  detectStaticGesture(landmarks, handedness, handId) {
-    // Enhanced finger extension detection specifically for pointing gestures
-    const indexFingerExtended = this.isFingerExtendedImproved(landmarks, 1);
-    const middleFingerExtended = this.isFingerExtendedImproved(landmarks, 2);
-    const ringFingerExtended = this.isFingerExtendedImproved(landmarks, 3);
-    const pinkyFingerExtended = this.isFingerExtendedImproved(landmarks, 4);
-
-    // Get the wrist and important finger landmarks
-    const wrist = landmarks[0];
-    const indexTip = landmarks[8];
-    const thumbTip = landmarks[4];
-
-    // PINCH gesture - thumb and index finger close together
-    const thumbIndexDistance = this.distance3D(thumbTip, indexTip);
-
-    // Initialize pinch detection state for this hand if needed
-    if (this.lastPinchDistance[handId] === undefined) {
-      this.lastPinchDistance[handId] = thumbIndexDistance;
-      this.isPinching[handId] = false;
-    }
-
-    // Pinch thresholds
-    const PINCH_DISTANCE_THRESHOLD = 0.05; // How close thumb and index need to be to detect pinch
-    const PINCH_STATE_CHANGE_THRESHOLD = 0.02; // How much distance needs to change to switch pinch state
-
-    // Detect pinch gesture
-    const wasPinching = this.isPinching[handId];
-    const distanceDelta = this.lastPinchDistance[handId] - thumbIndexDistance;
-
-    // Check for significant distance change to avoid flickering
-    if (!wasPinching && thumbIndexDistance < PINCH_DISTANCE_THRESHOLD) {
-      // Start pinching
-      this.isPinching[handId] = true;
-    } else if (wasPinching && thumbIndexDistance > PINCH_DISTANCE_THRESHOLD + PINCH_STATE_CHANGE_THRESHOLD) {
-      // Stop pinching when fingers move significantly apart
-      this.isPinching[handId] = false;
-    }
-
-    // Update last distance
-    this.lastPinchDistance[handId] = thumbIndexDistance;
-
-    // If pinching, return pinch gesture
-    if (this.isPinching[handId]) {
-      return {
-        name: 'pinch',
-        strength: Math.max(0, 1 - thumbIndexDistance / PINCH_DISTANCE_THRESHOLD),
-        confidence: 0.9
+      // Create simulated MediaPipe results
+      const results = {
+        multiHandLandmarks: [landmarks],
+        multiHandedness: [{ label: 'Right', score: 0.95 }]
       };
-    }
 
-    // POINT gesture - only index finger extended
-    if (indexFingerExtended &&
-        !middleFingerExtended &&
-        !ringFingerExtended &&
-        !pinkyFingerExtended) {
+      // Notify hand update callbacks
+      if (this.handUpdateCallbacks.length > 0) {
+        this.handUpdateCallbacks.forEach(callback => callback(results));
+      }
 
-      // Calculate pointing direction (relative to wrist)
-      const dx = indexTip.x - wrist.x;
-      const dy = indexTip.y - wrist.y;
-      const dz = indexTip.z - wrist.z;
+      // Detect and notify about gestures
+      if (this.gestureCallbacks.length > 0) {
+        // Generate the appropriate gesture based on current state
+        let gesture = this.getSimulatedGesture(landmarks);
 
-      // Log coordinates for debugging if enabled
+        // Notify gesture callbacks if gesture exists and enough time has passed
+        if (gesture && Date.now() - this.gestureChangeTime > 500) {
+          this.gestureCallbacks.forEach(callback => {
+            callback(gesture, 'Right', landmarks);
+          });
+        }
+      }
+
+      // Continue animation
+      this.animationFrameId = requestAnimationFrame(animateFrame);
+    };
+
+    // Start animation loop
+    this.animationFrameId = requestAnimationFrame(animateFrame);
+  }
+
+  /**
+   * Start cycling through different gestures
+   */
+  startGestureCycling() {
+    // Define the gesture cycle sequence
+    const gestureCycle = [
+      { gesture: 'point', direction: 'up' },
+      { gesture: 'point', direction: 'right' },
+      { gesture: 'point', direction: 'down' },
+      { gesture: 'point', direction: 'left' },
+      { gesture: 'point', direction: 'forward' },
+      { gesture: 'point', direction: 'backward' },
+      { gesture: 'point', direction: 'top-left' },
+      { gesture: 'point', direction: 'top-right' },
+      { gesture: 'point', direction: 'bottom-left' },
+      { gesture: 'point', direction: 'bottom-right' },
+      { gesture: 'open' },
+      { gesture: 'grab' },
+      { gesture: 'pinch' },
+      { gesture: 'wave' },
+      { gesture: 'swipe', direction: 'right' },
+      { gesture: 'swipe', direction: 'left' },
+      { gesture: 'swipe', direction: 'up' },
+      { gesture: 'swipe', direction: 'down' }
+    ];
+
+    let cycleIndex = 0;
+
+    // Set up interval to cycle through gestures
+    this.gestureCycleInterval = setInterval(() => {
+      if (!this.isTracking) return;
+
+      // Get next gesture in cycle
+      const nextGesture = gestureCycle[cycleIndex];
+      this.currentGesture = nextGesture.gesture;
+      this.currentDirection = nextGesture.direction || null;
+
+      // Record the time of gesture change
+      this.gestureChangeTime = Date.now();
+
+      // Move to next gesture in cycle
+      cycleIndex = (cycleIndex + 1) % gestureCycle.length;
+
       if (this.debugMode) {
-        console.log(`Point vector: dx=${dx.toFixed(3)}, dy=${dy.toFixed(3)}, dz=${dz.toFixed(3)}`);
+        console.log(`Changed to ${this.currentGesture} ${this.currentDirection || ''}`);
       }
-
-      // Calculate magnitudes in different planes
-      const horizontalMag = Math.abs(dx);
-      const verticalMag = Math.abs(dy);
-      const depthMag = Math.abs(dz);
-
-      // For pointing direction detection
-      let pointingDirection = null;
-
-      // Forward detection is most important - reduce threshold to make it easier to detect
-      // For improved forward detection, check if z-component is significant
-      if (depthMag > 0.05 && depthMag > horizontalMag * 0.5 && depthMag > verticalMag * 0.5) {
-        // Pointing toward or away from the camera
-        pointingDirection = dz < 0 ? 'forward' : 'backward';
-
-        if (this.debugMode) {
-          console.log(`Detected ${pointingDirection} pointing with z=${dz.toFixed(3)}`);
-        }
-      }
-      // If not pointing forward/backward, check for diagonal directions
-      else {
-        // Determine if movement is more horizontal, vertical, or diagonal
-        const isSignificantHorizontal = horizontalMag > 0.03;
-        const isSignificantVertical = verticalMag > 0.03;
-
-        // For diagonal detection, need significant components in both directions
-        if (isSignificantHorizontal && isSignificantVertical) {
-          // It's a diagonal direction - determine which quadrant
-          if (dx > 0 && dy < 0) {
-            pointingDirection = 'top-right';
-          } else if (dx < 0 && dy < 0) {
-            pointingDirection = 'top-left';
-          } else if (dx > 0 && dy > 0) {
-            pointingDirection = 'bottom-right';
-          } else if (dx < 0 && dy > 0) {
-            pointingDirection = 'bottom-left';
-          }
-        }
-        // If not diagonal, determine if it's a cardinal direction
-        else if (horizontalMag > verticalMag) {
-          // Pointing horizontally
-          pointingDirection = dx > 0 ? 'right' : 'left';
-        } else {
-          // Pointing vertically
-          pointingDirection = dy > 0 ? 'down' : 'up';
-        }
-      }
-
-      return {
-        name: 'point',
-        direction: pointingDirection,
-        confidence: 0.9,
-        vector: { dx, dy, dz } // Include vector for debugging
-      };
-    }
-
-    // OPEN hand gesture - all fingers extended
-    if (indexFingerExtended &&
-        middleFingerExtended &&
-        ringFingerExtended &&
-        pinkyFingerExtended) {
-      return { name: 'open', confidence: 0.9 };
-    }
-
-    // GRAB gesture - no fingers extended
-    if (!indexFingerExtended &&
-        !middleFingerExtended &&
-        !ringFingerExtended &&
-        !pinkyFingerExtended) {
-      return { name: 'grab', confidence: 0.9 };
-    }
-
-    // No recognized gesture
-    return null;
+    }, 3000); // Change gesture every 3 seconds
   }
 
   /**
-   * Significantly improved finger extension detection that works in all directions
-   * @param {Array} landmarks - Hand landmarks from MediaPipe
-   * @param {Number} fingerIndex - Index of the finger (1=index, 2=middle, 3=ring, 4=pinky)
-   * @returns {Boolean} - True if the finger is extended
+   * Generate hand landmarks based on current gesture
+   * @returns {Array} - Simulated hand landmarks
    */
-  isFingerExtendedImproved(landmarks, fingerIndex) {
-    // Index mapping for different finger joints
-    const mcpIndex = fingerIndex * 4 + 1;  // Base joint (metacarpophalangeal)
-    const pipIndex = fingerIndex * 4 + 2;  // Middle joint (proximal interphalangeal)
-    const dipIndex = fingerIndex * 4 + 3;  // End joint (distal interphalangeal)
-    const tipIndex = fingerIndex * 4 + 4;  // Finger tip
+  generateHandLandmarks() {
+    // Create a basic hand shape
+    const landmarks = [];
 
-    // Get the landmarks
-    const wrist = landmarks[0];
-    const mcp = landmarks[mcpIndex];
-    const pip = landmarks[pipIndex];
-    const dip = landmarks[dipIndex];
-    const tip = landmarks[tipIndex];
+    // Wrist (landmark 0)
+    landmarks.push({ x: 0.5, y: 0.8, z: 0 });
 
-    // METHOD 1: Distance-based approach
-    // In a curled finger, the tip is close to the base of the palm
-    // In an extended finger, the tip is far from the base
-    const tipToWristDist = this.distance3D(tip, wrist);
-    const mcpToWristDist = this.distance3D(mcp, wrist);
+    // Add landmarks for different fingers and joints
+    // 21 landmarks total (1 wrist + 4 landmarks for each of the 5 fingers)
 
-    // Extended fingers have tips further from wrist than MCP joints
-    const distanceRatio = tipToWristDist / mcpToWristDist;
+    // Base positions for each finger
+    const thumbBase = { x: 0.4, y: 0.75, z: 0 };
+    const indexBase = { x: 0.45, y: 0.65, z: 0 };
+    const middleBase = { x: 0.5, y: 0.65, z: 0 };
+    const ringBase = { x: 0.55, y: 0.65, z: 0 };
+    const pinkyBase = { x: 0.6, y: 0.65, z: 0 };
 
-    // METHOD 2: Straightness-based approach
-    // In a curled finger, there's significant bending at the joints
-    // In an extended finger, the joints form a relatively straight line
+    // Modify the hand shape based on the current gesture
+    switch (this.currentGesture) {
+      case 'point':
+        // Add thumb (4 landmarks)
+        landmarks.push(
+          { x: thumbBase.x, y: thumbBase.y, z: 0 },
+          { x: thumbBase.x - 0.03, y: thumbBase.y - 0.03, z: 0 },
+          { x: thumbBase.x - 0.06, y: thumbBase.y - 0.06, z: 0 },
+          { x: thumbBase.x - 0.09, y: thumbBase.y - 0.09, z: 0 }
+        );
 
-    // Calculate vectors between joints
-    const wristToMcp = this.vectorBetween(wrist, mcp);
-    const mcpToPip = this.vectorBetween(mcp, pip);
-    const pipToDip = this.vectorBetween(pip, dip);
-    const dipToTip = this.vectorBetween(dip, tip);
+        // Add index finger (4 landmarks) - extended based on direction
+        this.addPointingFinger(landmarks, indexBase, this.currentDirection);
 
-    // Normalize vectors
-    const wristToMcpNorm = this.normalizeVector(wristToMcp);
-    const mcpToPipNorm = this.normalizeVector(mcpToPip);
-    const pipToDipNorm = this.normalizeVector(pipToDip);
-    const dipToTipNorm = this.normalizeVector(dipToTip);
+        // Add middle finger (4 landmarks) - curled
+        landmarks.push(
+          { x: middleBase.x, y: middleBase.y, z: 0 },
+          { x: middleBase.x, y: middleBase.y + 0.05, z: 0 },
+          { x: middleBase.x, y: middleBase.y + 0.08, z: 0 },
+          { x: middleBase.x, y: middleBase.y + 0.1, z: 0 }
+        );
 
-    // Calculate angles between segments (dot product of normalized vectors)
-    // Values close to 1 mean segments are aligned (straight finger)
-    // Values close to 0 or negative mean segments are at an angle (bent finger)
-    const alignmentMcpPip = this.dotProduct(wristToMcpNorm, mcpToPipNorm);
-    const alignmentPipDip = this.dotProduct(mcpToPipNorm, pipToDipNorm);
-    const alignmentDipTip = this.dotProduct(pipToDipNorm, dipToTipNorm);
+        // Add ring finger (4 landmarks) - curled
+        landmarks.push(
+          { x: ringBase.x, y: ringBase.y, z: 0 },
+          { x: ringBase.x, y: ringBase.y + 0.05, z: 0 },
+          { x: ringBase.x, y: ringBase.y + 0.08, z: 0 },
+          { x: ringBase.x, y: ringBase.y + 0.1, z: 0 }
+        );
 
-    // METHOD 3: Position-based method specially for index finger
-    // In certain hand orientations, the above methods can be unreliable
-    // For index finger particularly, check if it's clearly separated from other fingers
+        // Add pinky finger (4 landmarks) - curled
+        landmarks.push(
+          { x: pinkyBase.x, y: pinkyBase.y, z: 0 },
+          { x: pinkyBase.x, y: pinkyBase.y + 0.05, z: 0 },
+          { x: pinkyBase.x, y: pinkyBase.y + 0.08, z: 0 },
+          { x: pinkyBase.x, y: pinkyBase.y + 0.1, z: 0 }
+        );
+        break;
 
-    // For index finger (fingerIndex = 1), check separation from middle finger
-    let isSeparatedFromOthers = false;
-    if (fingerIndex === 1) {
-      const middleTip = landmarks[12]; // Middle finger tip
-      const indexToMiddleDist = this.distance3D(tip, middleTip);
-      const mcpToMiddleDist = this.distance3D(mcp, middleTip);
+      case 'open':
+        // Add thumb (4 landmarks) - extended
+        landmarks.push(
+          { x: thumbBase.x, y: thumbBase.y, z: 0 },
+          { x: thumbBase.x - 0.05, y: thumbBase.y - 0.05, z: 0 },
+          { x: thumbBase.x - 0.1, y: thumbBase.y - 0.05, z: 0 },
+          { x: thumbBase.x - 0.15, y: thumbBase.y - 0.05, z: 0 }
+        );
 
-      // If index tip is far from middle tip, it's separated/extended
-      isSeparatedFromOthers = indexToMiddleDist > mcpToMiddleDist * 0.7;
+        // Add index finger (4 landmarks) - extended
+        landmarks.push(
+          { x: indexBase.x, y: indexBase.y, z: 0 },
+          { x: indexBase.x, y: indexBase.y - 0.1, z: 0 },
+          { x: indexBase.x, y: indexBase.y - 0.2, z: 0 },
+          { x: indexBase.x, y: indexBase.y - 0.3, z: 0 }
+        );
+
+        // Add middle finger (4 landmarks) - extended
+        landmarks.push(
+          { x: middleBase.x, y: middleBase.y, z: 0 },
+          { x: middleBase.x, y: middleBase.y - 0.1, z: 0 },
+          { x: middleBase.x, y: middleBase.y - 0.2, z: 0 },
+          { x: middleBase.x, y: middleBase.y - 0.3, z: 0 }
+        );
+
+        // Add ring finger (4 landmarks) - extended
+        landmarks.push(
+          { x: ringBase.x, y: ringBase.y, z: 0 },
+          { x: ringBase.x, y: ringBase.y - 0.1, z: 0 },
+          { x: ringBase.x, y: ringBase.y - 0.2, z: 0 },
+          { x: ringBase.x, y: ringBase.y - 0.3, z: 0 }
+        );
+
+        // Add pinky finger (4 landmarks) - extended
+        landmarks.push(
+          { x: pinkyBase.x, y: pinkyBase.y, z: 0 },
+          { x: pinkyBase.x, y: pinkyBase.y - 0.1, z: 0 },
+          { x: pinkyBase.x, y: pinkyBase.y - 0.2, z: 0 },
+          { x: pinkyBase.x, y: pinkyBase.y - 0.3, z: 0 }
+        );
+        break;
+
+      case 'grab':
+        // All fingers curled
+        // Add thumb (4 landmarks) - curled
+        landmarks.push(
+          { x: thumbBase.x, y: thumbBase.y, z: 0 },
+          { x: thumbBase.x + 0.03, y: thumbBase.y, z: 0 },
+          { x: thumbBase.x + 0.06, y: thumbBase.y + 0.02, z: 0 },
+          { x: thumbBase.x + 0.08, y: thumbBase.y + 0.05, z: 0 }
+        );
+
+        // Add index finger (4 landmarks) - curled
+        landmarks.push(
+          { x: indexBase.x, y: indexBase.y, z: 0 },
+          { x: indexBase.x, y: indexBase.y + 0.05, z: 0 },
+          { x: indexBase.x, y: indexBase.y + 0.1, z: 0 },
+          { x: indexBase.x, y: indexBase.y + 0.12, z: 0 }
+        );
+
+        // Add middle finger (4 landmarks) - curled
+        landmarks.push(
+          { x: middleBase.x, y: middleBase.y, z: 0 },
+          { x: middleBase.x, y: middleBase.y + 0.05, z: 0 },
+          { x: middleBase.x, y: middleBase.y + 0.1, z: 0 },
+          { x: middleBase.x, y: middleBase.y + 0.12, z: 0 }
+        );
+
+        // Add ring finger (4 landmarks) - curled
+        landmarks.push(
+          { x: ringBase.x, y: ringBase.y, z: 0 },
+          { x: ringBase.x, y: ringBase.y + 0.05, z: 0 },
+          { x: ringBase.x, y: ringBase.y + 0.1, z: 0 },
+          { x: ringBase.x, y: ringBase.y + 0.12, z: 0 }
+        );
+
+        // Add pinky finger (4 landmarks) - curled
+        landmarks.push(
+          { x: pinkyBase.x, y: pinkyBase.y, z: 0 },
+          { x: pinkyBase.x, y: pinkyBase.y + 0.05, z: 0 },
+          { x: pinkyBase.x, y: pinkyBase.y + 0.1, z: 0 },
+          { x: pinkyBase.x, y: pinkyBase.y + 0.12, z: 0 }
+        );
+        break;
+
+      case 'pinch':
+        // Add thumb (4 landmarks) - pointing toward index
+        landmarks.push(
+          { x: thumbBase.x, y: thumbBase.y, z: 0 },
+          { x: thumbBase.x + 0.02, y: thumbBase.y - 0.05, z: 0 },
+          { x: thumbBase.x + 0.04, y: thumbBase.y - 0.1, z: 0 },
+          { x: indexBase.x, y: indexBase.y - 0.15, z: 0 } // Thumb tip meets index tip
+        );
+
+        // Add index finger (4 landmarks) - pointing toward thumb
+        landmarks.push(
+          { x: indexBase.x, y: indexBase.y, z: 0 },
+          { x: indexBase.x, y: indexBase.y - 0.05, z: 0 },
+          { x: indexBase.x, y: indexBase.y - 0.1, z: 0 },
+          { x: indexBase.x, y: indexBase.y - 0.15, z: 0 } // Index tip meets thumb tip
+        );
+
+        // Add middle finger (4 landmarks) - extended
+        landmarks.push(
+          { x: middleBase.x, y: middleBase.y, z: 0 },
+          { x: middleBase.x, y: middleBase.y - 0.1, z: 0 },
+          { x: middleBase.x, y: middleBase.y - 0.2, z: 0 },
+          { x: middleBase.x, y: middleBase.y - 0.3, z: 0 }
+        );
+
+        // Add ring finger (4 landmarks) - extended
+        landmarks.push(
+          { x: ringBase.x, y: ringBase.y, z: 0 },
+          { x: ringBase.x, y: ringBase.y - 0.1, z: 0 },
+          { x: ringBase.x, y: ringBase.y - 0.2, z: 0 },
+          { x: ringBase.x, y: ringBase.y - 0.3, z: 0 }
+        );
+
+        // Add pinky finger (4 landmarks) - extended
+        landmarks.push(
+          { x: pinkyBase.x, y: pinkyBase.y, z: 0 },
+          { x: pinkyBase.x, y: pinkyBase.y - 0.1, z: 0 },
+          { x: pinkyBase.x, y: pinkyBase.y - 0.2, z: 0 },
+          { x: pinkyBase.x, y: pinkyBase.y - 0.3, z: 0 }
+        );
+        break;
+
+      case 'wave':
+        // Similar to open hand but with slight offset for animation
+        // Add sine wave movement to simulate waving
+        const waveOffset = Math.sin(Date.now() / 150) * 0.1;
+
+        // Add thumb (4 landmarks)
+        landmarks.push(
+          { x: thumbBase.x + waveOffset, y: thumbBase.y, z: 0 },
+          { x: thumbBase.x - 0.05 + waveOffset, y: thumbBase.y - 0.05, z: 0 },
+          { x: thumbBase.x - 0.1 + waveOffset, y: thumbBase.y - 0.05, z: 0 },
+          { x: thumbBase.x - 0.15 + waveOffset, y: thumbBase.y - 0.05, z: 0 }
+        );
+
+        // Add index finger (4 landmarks)
+        landmarks.push(
+          { x: indexBase.x + waveOffset, y: indexBase.y, z: 0 },
+          { x: indexBase.x + waveOffset, y: indexBase.y - 0.1, z: 0 },
+          { x: indexBase.x + waveOffset, y: indexBase.y - 0.2, z: 0 },
+          { x: indexBase.x + waveOffset, y: indexBase.y - 0.3, z: 0 }
+        );
+
+        // Add middle finger (4 landmarks)
+        landmarks.push(
+          { x: middleBase.x + waveOffset, y: middleBase.y, z: 0 },
+          { x: middleBase.x + waveOffset, y: middleBase.y - 0.1, z: 0 },
+          { x: middleBase.x + waveOffset, y: middleBase.y - 0.2, z: 0 },
+          { x: middleBase.x + waveOffset, y: middleBase.y - 0.3, z: 0 }
+        );
+
+        // Add ring finger (4 landmarks)
+        landmarks.push(
+          { x: ringBase.x + waveOffset, y: ringBase.y, z: 0 },
+          { x: ringBase.x + waveOffset, y: ringBase.y - 0.1, z: 0 },
+          { x: ringBase.x + waveOffset, y: ringBase.y - 0.2, z: 0 },
+          { x: ringBase.x + waveOffset, y: ringBase.y - 0.3, z: 0 }
+        );
+
+        // Add pinky finger (4 landmarks)
+        landmarks.push(
+          { x: pinkyBase.x + waveOffset, y: pinkyBase.y, z: 0 },
+          { x: pinkyBase.x + waveOffset, y: pinkyBase.y - 0.1, z: 0 },
+          { x: pinkyBase.x + waveOffset, y: pinkyBase.y - 0.2, z: 0 },
+          { x: pinkyBase.x + waveOffset, y: pinkyBase.y - 0.3, z: 0 }
+        );
+        break;
+
+      case 'swipe':
+        // Similar to open hand but with movement in specified direction
+        const swipeProgress = (Date.now() % 1000) / 1000; // 0 to 1 over 1 second
+        let swipeOffsetX = 0;
+        let swipeOffsetY = 0;
+
+        // Set offset based on direction
+        if (this.currentDirection === 'right') {
+          swipeOffsetX = swipeProgress * 0.3;
+        } else if (this.currentDirection === 'left') {
+          swipeOffsetX = -swipeProgress * 0.3;
+        } else if (this.currentDirection === 'up') {
+          swipeOffsetY = -swipeProgress * 0.3;
+        } else if (this.currentDirection === 'down') {
+          swipeOffsetY = swipeProgress * 0.3;
+        }
+
+        // Add thumb (4 landmarks)
+        landmarks.push(
+          { x: thumbBase.x + swipeOffsetX, y: thumbBase.y + swipeOffsetY, z: 0 },
+          { x: thumbBase.x - 0.05 + swipeOffsetX, y: thumbBase.y - 0.05 + swipeOffsetY, z: 0 },
+          { x: thumbBase.x - 0.1 + swipeOffsetX, y: thumbBase.y - 0.05 + swipeOffsetY, z: 0 },
+          { x: thumbBase.x - 0.15 + swipeOffsetX, y: thumbBase.y - 0.05 + swipeOffsetY, z: 0 }
+        );
+
+        // Add index finger (4 landmarks)
+        landmarks.push(
+          { x: indexBase.x + swipeOffsetX, y: indexBase.y + swipeOffsetY, z: 0 },
+          { x: indexBase.x + swipeOffsetX, y: indexBase.y - 0.1 + swipeOffsetY, z: 0 },
+          { x: indexBase.x + swipeOffsetX, y: indexBase.y - 0.2 + swipeOffsetY, z: 0 },
+          { x: indexBase.x + swipeOffsetX, y: indexBase.y - 0.3 + swipeOffsetY, z: 0 }
+        );
+
+        // Add middle finger (4 landmarks)
+        landmarks.push(
+          { x: middleBase.x + swipeOffsetX, y: middleBase.y + swipeOffsetY, z: 0 },
+          { x: middleBase.x + swipeOffsetX, y: middleBase.y - 0.1 + swipeOffsetY, z: 0 },
+          { x: middleBase.x + swipeOffsetX, y: middleBase.y - 0.2 + swipeOffsetY, z: 0 },
+          { x: middleBase.x + swipeOffsetX, y: middleBase.y - 0.3 + swipeOffsetY, z: 0 }
+        );
+
+        // Add ring finger (4 landmarks)
+        landmarks.push(
+          { x: ringBase.x + swipeOffsetX, y: ringBase.y + swipeOffsetY, z: 0 },
+          { x: ringBase.x + swipeOffsetX, y: ringBase.y - 0.1 + swipeOffsetY, z: 0 },
+          { x: ringBase.x + swipeOffsetX, y: ringBase.y - 0.2 + swipeOffsetY, z: 0 },
+          { x: ringBase.x + swipeOffsetX, y: ringBase.y - 0.3 + swipeOffsetY, z: 0 }
+        );
+
+        // Add pinky finger (4 landmarks)
+        landmarks.push(
+          { x: pinkyBase.x + swipeOffsetX, y: pinkyBase.y + swipeOffsetY, z: 0 },
+          { x: pinkyBase.x + swipeOffsetX, y: pinkyBase.y - 0.1 + swipeOffsetY, z: 0 },
+          { x: pinkyBase.x + swipeOffsetX, y: pinkyBase.y - 0.2 + swipeOffsetY, z: 0 },
+          { x: pinkyBase.x + swipeOffsetX, y: pinkyBase.y - 0.3 + swipeOffsetY, z: 0 }
+        );
+        break;
+
+      default:
+        // Default to open hand
+        // Add thumb (4 landmarks)
+        landmarks.push(
+          { x: thumbBase.x, y: thumbBase.y, z: 0 },
+          { x: thumbBase.x - 0.05, y: thumbBase.y - 0.05, z: 0 },
+          { x: thumbBase.x - 0.1, y: thumbBase.y - 0.05, z: 0 },
+          { x: thumbBase.x - 0.15, y: thumbBase.y - 0.05, z: 0 }
+        );
+
+        // Add index finger (4 landmarks)
+        landmarks.push(
+          { x: indexBase.x, y: indexBase.y, z: 0 },
+          { x: indexBase.x, y: indexBase.y - 0.1, z: 0 },
+          { x: indexBase.x, y: indexBase.y - 0.2, z: 0 },
+          { x: indexBase.x, y: indexBase.y - 0.3, z: 0 }
+        );
+
+        // Add middle finger (4 landmarks)
+        landmarks.push(
+          { x: middleBase.x, y: middleBase.y, z: 0 },
+          { x: middleBase.x, y: middleBase.y - 0.1, z: 0 },
+          { x: middleBase.x, y: middleBase.y - 0.2, z: 0 },
+          { x: middleBase.x, y: middleBase.y - 0.3, z: 0 }
+        );
+
+        // Add ring finger (4 landmarks)
+        landmarks.push(
+          { x: ringBase.x, y: ringBase.y, z: 0 },
+          { x: ringBase.x, y: ringBase.y - 0.1, z: 0 },
+          { x: ringBase.x, y: ringBase.y - 0.2, z: 0 },
+          { x: ringBase.x, y: ringBase.y - 0.3, z: 0 }
+        );
+
+        // Add pinky finger (4 landmarks)
+        landmarks.push(
+          { x: pinkyBase.x, y: pinkyBase.y, z: 0 },
+          { x: pinkyBase.x, y: pinkyBase.y - 0.1, z: 0 },
+          { x: pinkyBase.x, y: pinkyBase.y - 0.2, z: 0 },
+          { x: pinkyBase.x, y: pinkyBase.y - 0.3, z: 0 }
+        );
+        break;
     }
 
-    // COMBINED DECISION
-    // Different thresholds for index finger vs. other fingers
-    // Index finger is considered extended more liberally
-    if (fingerIndex === 1) {
-      // For index finger: looser criteria because pointing is important
-      return (
-        (distanceRatio > 1.1) || // Distance method - extended
-        (alignmentMcpPip > 0.5 && alignmentPipDip > 0.5) || // Alignment method - somewhat straight
-        isSeparatedFromOthers // Separation method - clearly separated
+    return landmarks;
+  }
+
+/**
+   * Add a pointing finger to the landmarks array based on direction
+   * @param {Array} landmarks - Array of landmarks to add to
+   * @param {Object} base - Base position of the finger
+   * @param {String} direction - Direction to point
+   */
+addPointingFinger(landmarks, base, direction) {
+  switch (direction) {
+    case 'up':
+      landmarks.push(
+        { x: base.x, y: base.y, z: 0 },
+        { x: base.x, y: base.y - 0.1, z: 0 },
+        { x: base.x, y: base.y - 0.2, z: 0 },
+        { x: base.x, y: base.y - 0.3, z: 0 }
       );
-    } else {
-      // For other fingers: stricter criteria
-      return (
-        (distanceRatio > 1.2) && // Distance method - clearly extended
-        (alignmentMcpPip > 0.7 && alignmentPipDip > 0.7) // Alignment method - very straight
+      break;
+    case 'down':
+      landmarks.push(
+        { x: base.x, y: base.y, z: 0 },
+        { x: base.x, y: base.y + 0.1, z: 0 },
+        { x: base.x, y: base.y + 0.2, z: 0 },
+        { x: base.x, y: base.y + 0.3, z: 0 }
       );
-    }
-  }
-
-  /**
-   * Calculate vector between two points
-   * @param {Object} a - First point with x,y,z coordinates
-   * @param {Object} b - Second point with x,y,z coordinates
-   * @returns {Object} - Vector from a to b
-   */
-  vectorBetween(a, b) {
-    return {
-      x: b.x - a.x,
-      y: b.y - a.y,
-      z: b.z - a.z
-    };
-  }
-
-  /**
-   * Normalize vector to unit length
-   * @param {Object} v - Vector with x,y,z components
-   * @returns {Object} - Normalized vector
-   */
-  normalizeVector(v) {
-    const length = Math.sqrt(v.x*v.x + v.y*v.y + v.z*v.z);
-    if (length === 0) return { x: 0, y: 0, z: 0 };
-
-    return {
-      x: v.x / length,
-      y: v.y / length,
-      z: v.z / length
-    };
-  }
-
-  /**
-   * Calculate dot product of two vectors
-   * @param {Object} a - First vector with x,y,z components
-   * @param {Object} b - Second vector with x,y,z components
-   * @returns {Number} - Dot product of vectors
-   */
-  dotProduct(a, b) {
-    return a.x * b.x + a.y * b.y + a.z * b.z;
-  }
-
-  /**
-   * Calculate 3D distance between two points
-   * @param {Object} a - First point with x,y,z coordinates
-   * @param {Object} b - Second point with x,y,z coordinates
-   * @returns {Number} - Distance between points
-   */
-  distance3D(a, b) {
-    return Math.sqrt(
-      Math.pow(a.x - b.x, 2) +
-      Math.pow(a.y - b.y, 2) +
-      Math.pow(a.z - b.z, 2)
-    );
+      break;
+    case 'left':
+      landmarks.push(
+        { x: base.x, y: base.y, z: 0 },
+        { x: base.x - 0.1, y: base.y, z: 0 },
+        { x: base.x - 0.2, y: base.y, z: 0 },
+        { x: base.x - 0.3, y: base.y, z: 0 }
+      );
+      break;
+    case 'right':
+      landmarks.push(
+        { x: base.x, y: base.y, z: 0 },
+        { x: base.x + 0.1, y: base.y, z: 0 },
+        { x: base.x + 0.2, y: base.y, z: 0 },
+        { x: base.x + 0.3, y: base.y, z: 0 }
+      );
+      break;
+    case 'forward':
+      landmarks.push(
+        { x: base.x, y: base.y, z: 0 },
+        { x: base.x, y: base.y - 0.1, z: -0.1 },
+        { x: base.x, y: base.y - 0.15, z: -0.2 },
+        { x: base.x, y: base.y - 0.2, z: -0.3 }
+      );
+      break;
+    case 'backward':
+      landmarks.push(
+        { x: base.x, y: base.y, z: 0 },
+        { x: base.x, y: base.y - 0.1, z: 0.1 },
+        { x: base.x, y: base.y - 0.15, z: 0.2 },
+        { x: base.x, y: base.y - 0.2, z: 0.3 }
+      );
+      break;
+    case 'top-left':
+      landmarks.push(
+        { x: base.x, y: base.y, z: 0 },
+        { x: base.x - 0.1, y: base.y - 0.1, z: 0 },
+        { x: base.x - 0.2, y: base.y - 0.2, z: 0 },
+        { x: base.x - 0.3, y: base.y - 0.3, z: 0 }
+      );
+      break;
+    case 'top-right':
+      landmarks.push(
+        { x: base.x, y: base.y, z: 0 },
+        { x: base.x + 0.1, y: base.y - 0.1, z: 0 },
+        { x: base.x + 0.2, y: base.y - 0.2, z: 0 },
+        { x: base.x + 0.3, y: base.y - 0.3, z: 0 }
+      );
+      break;
+    case 'bottom-left':
+      landmarks.push(
+        { x: base.x, y: base.y, z: 0 },
+        { x: base.x - 0.1, y: base.y + 0.1, z: 0 },
+        { x: base.x - 0.2, y: base.y + 0.2, z: 0 },
+        { x: base.x - 0.3, y: base.y + 0.3, z: 0 }
+      );
+      break;
+    case 'bottom-right':
+      landmarks.push(
+        { x: base.x, y: base.y, z: 0 },
+        { x: base.x + 0.1, y: base.y + 0.1, z: 0 },
+        { x: base.x + 0.2, y: base.y + 0.2, z: 0 },
+        { x: base.x + 0.3, y: base.y + 0.3, z: 0 }
+      );
+      break;
+    default:
+      // Default to pointing up
+      landmarks.push(
+        { x: base.x, y: base.y, z: 0 },
+        { x: base.x, y: base.y - 0.1, z: 0 },
+        { x: base.x, y: base.y - 0.2, z: 0 },
+        { x: base.x, y: base.y - 0.3, z: 0 }
+      );
+      break;
   }
 }
 
-export default MediaPipeProvider;
+/**
+ * Get simulated gesture based on current state
+ * @param {Array} landmarks - Hand landmarks
+ * @returns {Object|null} - Simulated gesture or null
+ */
+getSimulatedGesture(landmarks) {
+  switch (this.currentGesture) {
+    case 'point':
+      return {
+        name: 'point',
+        direction: this.currentDirection || 'up',
+        confidence: 0.9,
+        vector: {
+          dx: this.currentDirection === 'right' ? 0.3 : (this.currentDirection === 'left' ? -0.3 : 0),
+          dy: this.currentDirection === 'down' ? 0.3 : (this.currentDirection === 'up' ? -0.3 : 0),
+          dz: this.currentDirection === 'backward' ? 0.3 : (this.currentDirection === 'forward' ? -0.3 : 0)
+        }
+      };
+    case 'open':
+      return { name: 'open', confidence: 0.9 };
+    case 'grab':
+      return { name: 'grab', confidence: 0.9 };
+    case 'pinch':
+      return {
+        name: 'pinch',
+        strength: 0.9,
+        duration: 500, // Simulated duration
+        confidence: 0.9
+      };
+    case 'wave':
+      return { name: 'wave', confidence: 0.9 };
+    case 'swipe':
+      return {
+        name: 'swipe',
+        direction: this.currentDirection || 'right',
+        speed: 0.8,
+        confidence: 0.9
+      };
+    default:
+      return null;
+  }
+}
+}
+
+export default MockProvider;
